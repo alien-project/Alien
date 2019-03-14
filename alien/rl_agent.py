@@ -1,7 +1,10 @@
-from spacetime import Spacetime, SpacetimeInterpretation
-from data_structures import SortedLimitedList
+from trajectory import Interpretation
+from helpers import SortedLimitedList
 from memory import Memory
+from storithm import Procedure, ActionAtom, StateAtom
+from prediction import BasePredictor, Prediction, Predictor
 from functools import partial
+from copy import deepcopy
 
 
 class RLAgent:
@@ -11,9 +14,10 @@ class RLAgent:
         external_actions,
         target_return=0,
         antitarget_return=0,
-        return_discount_factor=0.5,  # if changes, re-calc importance
-        return_time=1,  # if changes, re-calc importance
+        return_discount_factor=0.5,
+        horizon=1,
         impact_discount_factor=0.5,
+        time_importance_factor=1.1,
         new_procedures_count=5000,
         new_loops_count=5000,
         max_storithms_count=5000,
@@ -21,15 +25,16 @@ class RLAgent:
         memory_tapes_count=2,
         memory_tapes_length=5000,
         internal_actions=None,
-        starting_points=None
+        starting_points=None,
     ):
-        self.observation_shape = observation_shape
-        self.external_actions = external_actions
+        self._observation_shape = observation_shape
+        self._external_actions = external_actions
         self.target_return = target_return
         self.antitarget_return = antitarget_return
-        self.return_discount_factor = return_discount_factor
-        self.return_time = return_time
+        self._return_discount_factor = return_discount_factor
+        self._horizon = horizon
         self.impact_discount_factor = impact_discount_factor
+        self.time_importance_factor = time_importance_factor
         self.new_procedures_count = new_procedures_count
         self.new_loops_count = new_loops_count
         self.max_predictors_count = max_predictors_count
@@ -38,31 +43,43 @@ class RLAgent:
             observation_shape,
             starting_points
         )
-        self._spacetime = Spacetime()
-        self._interpretation = SpacetimeInterpretation()
-        self._sorted_storithms = SortedLimitedList(max_storithms_count)
-        self._sorted_predictors = SortedLimitedList(max_predictors_count)
+        self._interpretation = Interpretation()
+        self._sorted_storithms = SortedLimitedList(
+            max_storithms_count,
+            lambda a, b: a.importance() > b.importance()
+        )  # this is not used
+        self._sorted_predictors = SortedLimitedList(
+            max_predictors_count,
+            RLAgent._compare_predictors
+        )
         self._rewards = []
-        self._current_moment = 0
+        self._returns = []
+        self._current_external_tour = 0
+        self._current_internal_tour = 0
         self._importance_for_distance_cache = []
-        self.memory = Memory(  # better set memory as an optional parameter
+        self._memory = Memory(  # better set memory as an optional parameter
             observation_shape,
             memory_tapes_length,
             memory_tapes_count
         )
+        self._storithms = {}
+        self._sample_weight = 1
+        self._interpretation_cache = {}
+        self._external_actions_positions = []
 
     def act(self, observation, reward):
-        self.memory.external_observation = observation
-        action = self._act_internally(
-            self.memory.internal_observation(),
-            reward
-        )
+        self._prepare_before_learn(reward)
+        self._learn()
+        self._prepare_after_learn(observation)
+
+        self._prepare_before_act_internally()
+        action = self._act_internally()
+        self._prepare_after_act_internally(action)
         while not action.external:
-            self.memory.external_observation = observation
-            action = self._act_internally(
-                self.memory.internal_observation(),
-                None
-            )
+            self._prepare_before_act_internally()
+            action = self._act_internally()
+            self._prepare_after_act_internally(action)
+
         return action
 
     @staticmethod
@@ -71,9 +88,170 @@ class RLAgent:
             memory_tapes_count=2,
             starting_points=None  # this should be on the second place
     ):
-        actions = [
+        return RLAgent._convert_to_actions_dict(
+            RLAgent._load_observation_actions() +
+            RLAgent._set_value_actions(memory_tapes_count) +
+            RLAgent._move_pointer_actions(
+                observation_dimensionality,
+                memory_tapes_count
+            ) +
+            RLAgent._go_to_starting_point_actions(
+                observation_dimensionality,
+                starting_points
+            )
+        )
+
+    def _prepare_before_learn(self, reward):
+        self._rewards.append(reward)
+
+        previous_return = self._returns[-1]
+        reward_before_horizon = (
+            self._rewards[-self._horizon - 2]
+            if self._current_external_tour > self._horizon
+            else 0
+        )
+        return_ = previous_return + reward - reward_before_horizon
+        self._returns.append(return_)
+
+    def _learn(self):
+        self._create()
+        self._fit()
+        self._merge()
+
+    def _create(self):
+        if self._current_external_tour <= self._horizon:
+            return None
+
+        return_ = self._returns[-1]
+        max_new_predictors_count = self._max_new_predictors_count(return_)
+        new_predictors_count = 0
+        for i in range(self.new_procedures_count):
+            proposal = Procedure.propose_new(
+                self._interpretation,
+                self._horizon,
+                self.impact_discount_factor
+            )
+            if not proposal:
+                continue
+
+            distance, predictor = self._proposed_predictor(proposal)
+            storithm_already_exists = proposal.storithm in self._storithms
+            predictor_already_exists = (
+                storithm_already_exists and
+                distance in self._storithms[proposal.storithm].predictors
+            )
+
+            if storithm_already_exists:
+                proposal.storithm = self._storithms[proposal.storithm]
+            else:
+                self._storithms[proposal.storithm] = proposal.storithm
+
+            if not predictor_already_exists:
+                storithm = self._storithms[proposal.storithm]
+                storithm.predictors[distance] = predictor
+
+            self._interpretation.add(proposal)
+
+            new_predictors_count += 1
+            if new_predictors_count >= max_new_predictors_count:
+                break
+
+    def _max_new_predictors_count(self, return_):
+        importance = self._importance_for_reward(return_)
+        limit = self._sorted_predictors.limit
+        position = self._sorted_predictors.position(importance)
+        return limit - position
+
+    def _proposed_predictor(self, proposal):
+        predictors = proposal.storithm.predictors
+        for key in predictors:
+            return key, predictors[key]
+
+    def _importance_for_reward(self, reward):
+        predictor = Predictor()
+        prediction = Prediction()
+        prediction.predictors = [predictor]
+        prediction.fit(reward, self._sample_weight)
+        return predictor.importance()
+
+    def _fit(self):
+        if self._current_external_tour <= self._horizon:
+            return None
+        start = self._external_actions_positions[-self._horizon - 2]
+        end = self._external_actions_positions[-self._horizon - 1] - 1
+        return_ = sum(self._rewards[-self._horizon - 1:])
+        for tour in range(start, end):
+            prediction = Prediction()
+            prediction.predictors = self._interpretation.predictors_in_cells[
+                tour
+            ]
+            prediction.fit(return_, self._sample_weight)
+            for predictor in prediction.predictors:
+                self._sorted_predictors.update_position(predictor)
+
+        # prediction_occurrences = self._prediction_occurrences[
+        #     self._current_tour - self._horizon
+        # ]
+        # for prediction_occurrence in prediction_occurrences:
+        #     storithm = prediction_occurrence.storithm_occurrence.storithm
+        #     storithm.update_predictions_importance()
+        #     predictor = prediction_occurrence.predictor
+        #     self._sorted_predictors.update_position(predictor)
+
+    def _merge(self):
+        pass
+
+    def _prepare_after_learn(self, observation):
+        self._memory.external_observation = observation
+        self._sample_weight *= self.time_importance_factor
+
+    def _prepare_before_act_internally(self):
+        self._interpretation.extend()
+        internal_observation = self._memory.internal_observation().tolist()
+        for state_id, value in enumerate(internal_observation):
+            self._interpretation.add_at_the_end(StateAtom(state_id, value))
+
+    def _act_internally(self):
+        action_values = self._predict()
+        action = self._choose(action_values)
+        action.execute(self._memory if action.external else None)
+        return action
+
+    def _predict(self):
+        actions = self._internal_actions + self._external_actions
+        action_values = {}
+        for action in actions:
+            simulation = deepcopy(self._interpretation)
+            simulation.add_at_the_end(ActionAtom(action))
+            simulation.interpret()
+            self._interpretation_cache[action] = simulation
+            prediction = Prediction()
+            prediction.predictors = simulation.predictors_at_the_end()
+            action_values[action] = prediction.predict()
+        return action_values
+
+    def _choose(self, action_values):
+        return Action()
+
+    def _prepare_after_act_internally(self, action):
+        self._interpretation = self._interpretation_cache[action]
+        self._interpretation_cache = {}
+        if action.external:
+            self._external_actions_positions.append(
+                self._current_internal_tour
+            )
+            self._current_external_tour += 1
+        self._current_internal_tour += 1
+
+    @staticmethod
+    def _load_observation_actions():
+        return [
             Action("load_observation", Memory.load_observation, False),
         ]
+
+    @staticmethod
+    def _set_value_actions(memory_tapes_count):
+        actions = []
         for i in range(2):
             action = Action(
                 "set_value_observation_" + str(i),
@@ -88,6 +266,14 @@ class RLAgent:
                     False
                 )
                 actions.append(action)
+        return actions
+
+    @staticmethod
+    def _move_pointer_actions(
+        observation_dimensionality,
+        memory_tapes_count
+    ):
+        actions = []
         for i in range(observation_dimensionality):
             increment_action = Action(
                 "increment_pointer_observation_" + str(i),
@@ -112,6 +298,14 @@ class RLAgent:
                 False
             )
             actions += [increment_action, decrement_action]
+        return actions
+
+    @staticmethod
+    def _go_to_starting_point_actions(
+        observation_dimensionality,
+        starting_points=None
+    ):
+        actions = []
         starting_points = (
             starting_points or
             RLAgent._default_starting_points(observation_dimensionality)
@@ -123,80 +317,7 @@ class RLAgent:
                 False
             )
             actions.append(action)
-        return RLAgent._convert_to_actions_dict(actions)
-
-    def _act_internally(self, internal_observation, reward):
-        self._prepare_beginning(internal_observation)
-        self._observe(reward)
-        action = self._react()
-        self._prepare_end(action)
-        return action
-
-    def _prepare_beginning(self, internal_observation):
-        self._spacetime.observations.append(internal_observation)
-
-    def _prepare_end(self, action):
-        self._spacetime.actions.append(action)
-
-    def _observe(self, reward):
-        self._create_new_storithms(reward)
-        self._fit(reward)
-        self._merge()
-        self._flush()
-
-    def _create_new_storithms(self, reward):
-        max_accepted_distance = self._max_accepted_distance(reward)
-        new_storithms, new_predictors = self._interpretation.\
-            create_new_storithms(
-                self.new_procedures_count,
-                self.impact_discount_factor,
-                max_accepted_distance
-            )
-        self._sorted_predictors += new_predictors
-        self._sorted_storithms += new_storithms
-
-    def _max_accepted_distance(self, reward):
-        """Max accepted distance for adding new predictors."""
-        for i in range(self.return_time):
-            importance = reward * self._importance_for_distance(i)
-            if importance <= self._min_accepted_importance():
-                return i
-        return self.return_time  # to do: growing sample importance
-
-    def _importance_for_distance(self, distance):
-        # _importance_for_distance_cache needs to be dict, not list
-        if len(self._importance_for_distance_cache) < distance:
-            return self._importance_for_distance_cache[distance]
-        if distance > self.return_time:
-            return 0
-        expression_bottom = 0
-        for i in range(self.return_time):
-            expression_bottom += self.return_discount_factor ** i
-        expression_top = expression_bottom
-        for i in range(self.return_time + 1):
-            self._importance_for_distance_cache[i] = (
-                expression_top / expression_bottom
-            )
-            expression_top -= self.return_discount_factor ** i
-        return self._importance_for_distance_cache[distance]
-
-    def _min_accepted_importance(self):
-        return self._sorted_predictors.last().importance
-
-    def _fit(self, reward):
-        pass
-
-    def _merge(self):
-        pass
-
-    def _flush(self):
-        pass
-
-    def _predict(self):
-        pass
-
-    def _react(self):
-        return Action()
+        return actions
 
     @staticmethod
     def _default_starting_points(observation_dimensionality):
@@ -229,6 +350,14 @@ class RLAgent:
             internal_actions = list(internal_actions.values())
         return internal_actions
 
+    @staticmethod
+    def _compare_predictors(a, b):
+        if isinstance(a, BasePredictor):
+            a = a.importance()
+        if isinstance(b, BasePredictor):
+            b = b.importance()
+        return a > b
+
 
 class Action:
     next_id = 0
@@ -251,8 +380,10 @@ class Action:
         if isinstance(id_, int):
             if id_ >= Action.next_id:
                 Action.next_id = id_ + 1
-                return id_
         return id_
 
     def __eq__(self, other):
         return self.id == other.id
+
+    def __hash__(self):
+        return hash(str(self))

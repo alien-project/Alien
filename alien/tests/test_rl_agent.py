@@ -1,4 +1,4 @@
-from alien.rl_agent import *
+from rl_agent import *
 from random import randint
 from memory import Memory
 from numpy import array, array_equal

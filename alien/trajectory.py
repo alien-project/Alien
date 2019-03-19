@@ -5,6 +5,7 @@ from collections import deque
 class Interpretation:
     """Represent interpretation of internal trajectory."""
     def __init__(self):
+        self.internal_trajectory = InternalTrajectory()
         self.storithm_occurrences = []
         # self.storithm_occurrences_in_cells = [] it seems that it's not needed
         self.storithm_occurrences_starting_in_cells = []
@@ -88,6 +89,12 @@ class Interpretation:
 
     def __len__(self):
         return len(self.storithm_occurrences_starting_in_cells)
+
+
+class InternalTrajectory:
+    def __init__(self, observations, actions):
+        self.observations = observations
+        self.actions = actions
 
 
 class StorithmOccurrence:

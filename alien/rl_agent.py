@@ -1,5 +1,5 @@
 from trajectory import Interpretation
-from helpers import SortedLimitedList
+from helpers import SortedLimitedList, AutoIncrementId
 from memory import Memory
 from storithm import Procedure, ActionAtom, StateAtom
 from prediction import BasePredictor, Prediction, Predictor
@@ -84,9 +84,9 @@ class RLAgent:
 
     @staticmethod
     def default_internal_actions(
-            observation_dimensionality,
-            memory_tapes_count=2,
-            starting_points=None  # this should be on the second place
+        observation_dimensionality,
+        memory_tapes_count=2,
+        starting_points=None
     ):
         return RLAgent._convert_to_actions_dict(
             RLAgent._load_observation_actions() +
@@ -126,31 +126,27 @@ class RLAgent:
         max_new_predictors_count = self._max_new_predictors_count(return_)
         new_predictors_count = 0
         for i in range(self.new_procedures_count):
-            proposal = Procedure.propose_new(
+            occurrence = Procedure.propose_new(
                 self._interpretation,
                 self._horizon,
                 self.impact_discount_factor
             )
-            if not proposal:
+            if not occurrence:
                 continue
 
-            distance, predictor = self._proposed_predictor(proposal)
-            storithm_already_exists = proposal.storithm in self._storithms
-            predictor_already_exists = (
-                storithm_already_exists and
-                distance in self._storithms[proposal.storithm].predictors
-            )
+            # margin_cell = len(self._interpretation) - self._horizon - 1
+            # distance = margin_cell - occurrence.end
+            # occurrence.storithm.predictors[distance] = Predictor()
 
-            if storithm_already_exists:
-                proposal.storithm = self._storithms[proposal.storithm]
+            if occurrence.storithm in self._storithms:
+                self._storithms[occurrence.storithm].merge(occurrence.storithm)
+                occurrence.storithm = self._storithms[occurrence.storithm]
             else:
-                self._storithms[proposal.storithm] = proposal.storithm
+                occurrence.storithm.generate_id()
+                self._storithms[occurrence.storithm] = occurrence.storithm
+            self._storithms[occurrence.storithm].connect_with_children()
 
-            if not predictor_already_exists:
-                storithm = self._storithms[proposal.storithm]
-                storithm.predictors[distance] = predictor
-
-            self._interpretation.add(proposal)
+            self._interpretation.add(occurrence)
 
             new_predictors_count += 1
             if new_predictors_count >= max_new_predictors_count:
@@ -162,10 +158,10 @@ class RLAgent:
         position = self._sorted_predictors.position(importance)
         return limit - position
 
-    def _proposed_predictor(self, proposal):
-        predictors = proposal.storithm.predictors
-        for key in predictors:
-            return key, predictors[key]
+    # def _proposed_predictor(self, proposal):
+    #     predictors = proposal.storithm.predictors
+    #     for key in predictors:
+    #         return key, predictors[key]
 
     def _importance_for_reward(self, reward):
         predictor = Predictor()
@@ -186,8 +182,16 @@ class RLAgent:
                 tour
             ]
             prediction.fit(return_, self._sample_weight)
-            for predictor in prediction.predictors:
-                self._sorted_predictors.update_position(predictor)
+            self._update_positions(prediction.predictors)
+
+    def _update_positions(self, predictors):
+        for predictor in predictors:
+            position = self._sorted_predictors.update_position(predictor)
+            if position is None:
+                predictor.storithm.predictors.pop(predictor.distance, None)
+                if not predictor.storithm.predictors:
+                    self._storithms.pop(predictor.storithm)
+                    predictor.storithm.disconnect_with_children()
 
         # prediction_occurrences = self._prediction_occurrences[
         #     self._current_tour - self._horizon
@@ -214,7 +218,7 @@ class RLAgent:
     def _act_internally(self):
         action_values = self._predict()
         action = self._choose(action_values)
-        action.execute(self._memory if action.external else None)
+        action.execute(None if action.external else self._memory)
         return action
 
     def _predict(self):
@@ -325,10 +329,7 @@ class RLAgent:
 
     @staticmethod
     def _convert_to_actions_dict(actions_list):
-        dict_ = {}
-        for action in actions_list:
-            dict_[action.id] = action
-        return dict_
+        return {action.id: action for action in actions_list}
 
     def _prepare_internal_actions(
             self, internal_actions,
@@ -360,10 +361,8 @@ class RLAgent:
 
 
 class Action:
-    next_id = 0
-
     def __init__(self, id_=None, execution=None, external=True):
-        self.id = self._auto_increment_id(id_)
+        self.id = AutoIncrementId.generate(id_)
         self.execution = execution
         self.external = external
 
@@ -372,15 +371,6 @@ class Action:
             self.execution()
         else:
             self.execution(memory)
-
-    def _auto_increment_id(self, id_):
-        if id_ is None:
-            Action.next_id += 1
-            return Action.next_id - 1
-        if isinstance(id_, int):
-            if id_ >= Action.next_id:
-                Action.next_id = id_ + 1
-        return id_
 
     def __eq__(self, other):
         return self.id == other.id

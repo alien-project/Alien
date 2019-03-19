@@ -1,46 +1,71 @@
 from prediction import Predictor
 from trajectory import StorithmOccurrence
 from random import choice
+from helpers import AutoIncrementId
 
 
 class Storithm:
-    def __init__(self, children, predictors=None):
+    def __init__(self, children, predictors=None, id_=None):
         self.children = children
         self.parent_pointers = []
-        self.parents_sampling_base = []
         self.predictors = predictors or {}
-        self.importance = 0
-        self.predictors_importance = 0
-        self.parents_importance = 0
+        self.connected_with_children = False
+        self.id = id_
+        # self.importance = 0
+        # self.predictors_importance = 0
+        # self.parents_importance = 0
+        # self.parents_sampling_base = []
+
+    def generate_id(self):
+        self.id = AutoIncrementId.generate()
 
     def add_parent(self, parent, position):
         self.parent_pointers.append(ParentPointer(parent, position))
 
-    def update_predictions_importance(self):
-        # to do: test
-        self.predictors_importance = 0
-        for distance, predictor in self.predictors.items():
-            self.predictors_importance += predictor.importance()
+    def remove_parent(self, parent, position):
+        self.parent_pointers.remove(ParentPointer(parent, position))
 
-        self.importance = self.predictors_importance + self.parents_importance
-
-        for child in self.children:
-            child.update_parents_importance()
-
-    def update_parents_importance(self):
-        # to do: test
-        self.parents_importance = 0
-        for parent_pointer in self.parent_pointers:
-            self.parents_importance += parent_pointer.parent.importance
-
-        self.importance = self.predictors_importance + self.parents_importance
+    def merge(self, proposed_storithm):
+        for key in proposed_storithm.predictors:
+            if key not in self.predictors:
+                self.predictors[key] = proposed_storithm.predictors[key]
 
     def connect_with_children(self):
         for key, child in enumerate(self.children):
             child.add_parent(self, key)
+        self.connected_with_children = True
+
+    def disconnect_with_children(self):
+        for key, child in enumerate(self.children):
+            child.remove_parent(self, key)
+        self.connected_with_children = False
 
     def check_occurrence(self, interpretation, child_occurrence, position):
         raise NotImplementedError
+
+    # def update_predictions_importance(self):
+    #     # to do: test
+    #     self.predictors_importance = 0
+    #     for distance, predictor in self.predictors.items():
+    #         self.predictors_importance += predictor.importance()
+    #
+    #     self.importance = self.predictors_importance +
+    # self.parents_importance
+    #
+    #     for child in self.children:
+    #         child.update_parents_importance()
+    #
+    # def update_parents_importance(self):
+    #     # to do: test
+    #     self.parents_importance = 0
+    #     for parent_pointer in self.parent_pointers:
+    #         self.parents_importance += parent_pointer.parent.importance
+    #
+    #     self.importance = self.predictors_importance +
+    # self.parents_importance
+
+    def __repr__(self):
+        return str(self)
 
     def __str__(self):
         return str(self.children[0]).join(" ").join(str(self.children[1]))
@@ -64,6 +89,12 @@ class ParentPointer:
             self.position
         )
 
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__ and
+            self.__dict__ == other.__dict__
+        )
+
 
 class Atom(Storithm):
     def __init__(self, predictors=None):
@@ -84,14 +115,19 @@ class ActionAtom(Atom):
         self.action = action
         super().__init__(predictors)
 
+    def create(self, interpretation, sample_distance):
+
+
     def __str__(self):
-        return "a_" + self.action.id
+        return "a_" + str(self.action.id)
 
     def __eq__(self, other):
-        return (
-            self.__class__ == other.__class__ and
-            self.action == other.action
-        )
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                self.action == other.action
+            )
+        return self.id == other.id
 
 
 class StateAtom(Atom):
@@ -101,17 +137,23 @@ class StateAtom(Atom):
         super().__init__(predictors)
 
     def __str__(self):
-        return "s_" + self.state_id + "_" + self.value
+        return "s_" + str(self.state_id) + "_" + str(self.value)
 
     def __eq__(self, other):
-        return (
-            self.__class__ == other.__class__ and
-            self.state_id == other.state_id and
-            self.value == other.value
-        )
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                self.state_id == other.state_id and
+                self.value == other.value
+            )
+        return self.id == other.id
 
 
 class Procedure(Storithm):
+    def __init__(self, children, predictors=None):
+        self._unconnected_children = {0: children[0]}
+        super().__init__(children, predictors)
+
     @staticmethod
     def propose_new(interpretation, margin, impact_discount_factor):
         distance_sampling_base = Procedure._distance_sampling_base(
@@ -133,6 +175,9 @@ class Procedure(Storithm):
         first_child_occurrence = choice(joint_cells[0])
         second_child_occurrence = choice(joint_cells[1])
         children = [
+            [first_child_occurrence.storithm, second_child_occurrence.storithm]
+        ]
+        found_by = [
             first_child_occurrence.storithm,
             second_child_occurrence.storithm
         ]
@@ -142,8 +187,33 @@ class Procedure(Storithm):
             Procedure(children, {distance: Predictor()}),
             first_child_occurrence.start,
             second_child_occurrence.end,
-            children
+            found_by
         )
+
+    def connect_with_children(self):  # test
+        for i in self._unconnected_children:
+            for j, child in enumerate(self._unconnected_children[i]):
+                child.add_parent(self, (i, j))
+        self._unconnected_children = {}
+        self.connected_with_children = True
+
+    def disconnect_with_children(self):
+        for i, group in enumerate(self.children):
+            for j, child in enumerate(group):
+                child.remove_parent(self, (i, j))
+        self._unconnected_children = dict(enumerate(self.children))
+        self.connected_with_children = False
+    
+    def merge(self, proposed_storithm):  # test
+        super().merge(proposed_storithm)
+        # optimization to do: use binary search for children,
+        # sorted by storithm id
+        unpacked_children = proposed_storithm.children[0]
+        if unpacked_children in self.children:
+            return None
+        self.children += proposed_storithm.children
+        self._unconnected_children[len(self.children) - 1] = unpacked_children
+        self.connected_with_children = False
 
     def check_occurrence(self, interpretation, child_occurrence, position):
         if position == 0:
@@ -174,33 +244,44 @@ class Procedure(Storithm):
     def _distance_sampling_base(impact_discount_factor):
         return [0, 0, 0, 1, 1, 2, 2]  # for now, it's hardcoded
 
+    def __str__(self):
+        first_child = self.children[0][0]
+        second_child = self.children[0][1]
+        return " ".join([str(first_child), str(second_child)])
+
     def __eq__(self, other):
-        return (
-            self.__class__ == other.__class__ and
-            self.children == self.children
-        )
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                str(self) == str(other)
+            )
+        return self.id == other.id
 
 
 class Loop(Storithm):
     def __init__(self, condition_child, body_child, predictors=None):
         super().__init__([condition_child, body_child], predictors)
 
-    def __eq__(self, other):
-        return (
-            self.__class__ == other.__class__ and
-            self.children == other.children
-        )
-
     def check_occurrence(self, interpretation, child_occurrence, position):
         return None
 
+    def __eq__(self, other):
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                self.children == other.children
+            )
+        return self.id == other.id
+
 
 class Fusion(Storithm):
-    def __eq__(self, other):
-        return (
-            self.__class__ == other.__class__ and
-            self.children == other.children
-        )
-
     def check_occurrence(self, interpretation, child_occurrence, position):
         return True
+
+    def __eq__(self, other):
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                self.children == other.children
+            )
+        return self.id == other.id

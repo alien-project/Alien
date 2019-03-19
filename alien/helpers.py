@@ -1,5 +1,3 @@
-from collections.abc import Iterable
-
 class SortedLimitedList:
     """A normal list but sorted and with size limit.
 
@@ -32,6 +30,10 @@ class SortedLimitedList:
     def update_position(self, element):
         """Updates position of an element in the list.
 
+        Returns new position in the list, if the element is removed
+        from the list because its value is too low, then it returns
+        None.
+
         Element is required to have 'id' attribute and should have had
         this attribute when adding by add() method. If the element is
         not in the list yet, then it adds a new element.
@@ -61,6 +63,21 @@ class SortedLimitedList:
         return 0
 
 
+class AutoIncrementId:
+    """Generates automatically incremented ids."""
+    next_id = 0
+
+    @staticmethod
+    def generate(id_=None):
+        if id_ is None:
+            AutoIncrementId.next_id += 1
+            return AutoIncrementId.next_id - 1
+        if isinstance(id_, int):
+            if id_ >= AutoIncrementId.next_id:
+                AutoIncrementId.next_id = id_ + 1
+        return id_
+
+
 def same(a, b):
     if a.__class__ != b.__class__:
         return False
@@ -79,7 +96,7 @@ def same(a, b):
                 return False
         return True
 
-    if isinstance(a, list) or isinstance(a, tuple):
+    if isinstance(a, list) or isinstance(a, tuple) or isinstance(a, set):
         if len(a) != len(b):
             return False
         for key, value in enumerate(a):

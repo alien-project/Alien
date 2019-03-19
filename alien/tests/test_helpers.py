@@ -47,3 +47,12 @@ def test_same():
     assert same(a, b)
 
     assert same([2, 3], [2, 3])
+
+
+def test_auto_increment_id_generate():
+    assert 0 == AutoIncrementId.generate()
+    assert 1 == AutoIncrementId.generate()
+    assert 5 == AutoIncrementId.generate(5)
+    assert 6 == AutoIncrementId.generate()
+    assert "str" == AutoIncrementId.generate("str")
+    assert 7 == AutoIncrementId.generate()

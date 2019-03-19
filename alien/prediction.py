@@ -1,17 +1,11 @@
+from helpers import AutoIncrementId
+
+
 class BasePredictor:
-    next_id = 0
-
     def __init__(self, id_=None):
-        self.id = self._auto_increment_id(id_)
-
-    def _auto_increment_id(self, id_):
-        if id_ is None:
-            BasePredictor.next_id += 1
-            return BasePredictor.next_id - 1
-        if isinstance(id_, int):
-            if id_ >= BasePredictor.next_id:
-                BasePredictor.next_id = id_ + 1
-        return id_
+        self.storithm = None
+        self.distance = None
+        self.id = AutoIncrementId.generate(id_)
 
     def importance(self):
         raise NotImplementedError
@@ -21,7 +15,7 @@ class BasePredictor:
 
     def same(self, other):
         a_dict = self.__dict__.copy()
-        b_dict = self.__dict__.copy()
+        b_dict = other.__dict__.copy()
         a_dict.pop('id')
         b_dict.pop('id')
         return (

@@ -8,8 +8,7 @@ from numpy import array, array_equal
 #     learning_trials_count = 1000000000
 #     testing_trials_count = 10
 #
-#     Action.next_id = 0
-#     rl_agent = RLAgent((1,), [Action(), Action()], 1, 0, 0.5, 2)
+#     rl_agent = RLAgent((1,), [Action(0), Action(1)], 1, 0, 0.5, 2)
 #
 #     reward = 0
 #     for _ in range(learning_trials_count):

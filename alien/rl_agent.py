@@ -1,10 +1,12 @@
 from trajectory import Interpretation
 from helpers import SortedLimitedList, AutoIncrementId
 from memory import Memory
-from storithm import Procedure, ActionAtom, StateAtom
-from prediction import BasePredictor, Prediction, Predictor
+from storithm import Procedure, Atom, ActionAtom, StateAtom
+from prediction import BasePredictor, Estimator, Predictor
 from functools import partial
 from copy import deepcopy
+from numpy import exp
+from numpy.random import choice
 
 
 class RLAgent:
@@ -18,8 +20,7 @@ class RLAgent:
         horizon=1,
         impact_discount_factor=0.5,
         time_importance_factor=1.1,
-        new_procedures_count=5000,
-        new_loops_count=5000,
+        create_storithm_types=None,
         max_storithms_count=5000,
         max_predictors_count=5000,
         memory_tapes_count=2,
@@ -35,8 +36,10 @@ class RLAgent:
         self._horizon = horizon
         self.impact_discount_factor = impact_discount_factor
         self.time_importance_factor = time_importance_factor
-        self.new_procedures_count = new_procedures_count
-        self.new_loops_count = new_loops_count
+        self.create_storithm_types = self._prepare_create_storithm_types(
+            create_storithm_types
+        )
+        self._create_storithm_types_left = []
         self.max_predictors_count = max_predictors_count
         self._internal_actions = self._prepare_internal_actions(
             internal_actions,
@@ -63,6 +66,7 @@ class RLAgent:
             memory_tapes_count
         )
         self._storithms = {}
+        self._atoms = {}
         self._sample_weight = 1
         self._interpretation_cache = {}
         self._external_actions_positions = []
@@ -125,25 +129,23 @@ class RLAgent:
         return_ = self._returns[-1]
         max_new_predictors_count = self._max_new_predictors_count(return_)
         new_predictors_count = 0
-        for i in range(self.new_procedures_count):
-            occurrence = Procedure.propose_new(
+        storithm_type = self._storithm_type_to_create(True)
+        while storithm_type:
+            occurrence = storithm_type.create(
                 self._interpretation,
-                self._horizon,
-                self.impact_discount_factor
+                self._sample_position
             )
             if not occurrence:
                 continue
 
-            # margin_cell = len(self._interpretation) - self._horizon - 1
-            # distance = margin_cell - occurrence.end
-            # occurrence.storithm.predictors[distance] = Predictor()
+            self._add_predictor(occurrence)
 
             if occurrence.storithm in self._storithms:
                 self._storithms[occurrence.storithm].merge(occurrence.storithm)
                 occurrence.storithm = self._storithms[occurrence.storithm]
             else:
-                occurrence.storithm.generate_id()
-                self._storithms[occurrence.storithm] = occurrence.storithm
+                self._add_storithm(occurrence.storithm)
+
             self._storithms[occurrence.storithm].connect_with_children()
 
             self._interpretation.add(occurrence)
@@ -152,22 +154,54 @@ class RLAgent:
             if new_predictors_count >= max_new_predictors_count:
                 break
 
+            storithm_type = self._storithm_type_to_create()
+
+    def _add_predictor(self, occurrence):
+        margin_cell = len(self._interpretation) - self._horizon - 1
+        distance = margin_cell - occurrence.end
+
+        predictor = Predictor()
+        predictor.storithm = occurrence.storithm
+        predictor.distance = distance
+        occurrence.storithm.predictors[distance] = predictor
+
     def _max_new_predictors_count(self, return_):
         importance = self._importance_for_reward(return_)
         limit = self._sorted_predictors.limit
         position = self._sorted_predictors.position(importance)
         return limit - position
 
-    # def _proposed_predictor(self, proposal):
-    #     predictors = proposal.storithm.predictors
-    #     for key in predictors:
-    #         return key, predictors[key]
+    def _add_storithm(self, storithm):
+        storithm.generate_id()
+        self._storithms[storithm] = storithm
+        if isinstance(storithm, Atom):
+            self._atoms[storithm] = storithm
+
+    def _storithm_type_to_create(self, first_in_tour=False):
+        if first_in_tour:
+            self._create_storithm_types_left = self.create_storithm_types
+
+        if not self._create_storithm_types_left[-1]:
+            self._create_storithm_types_left.pop()
+
+        if not self._create_storithm_types_left:
+            self._create_storithm_types_left = self.create_storithm_types
+            return None
+
+        last_element_keys = self._create_storithm_types_left[-1].keys()
+        storithm_type = choice(list(last_element_keys))
+        self._create_storithm_types_left[-1][storithm_type] -= 1
+        if self._create_storithm_types_left[-1][storithm_type] == 0:
+            self._create_storithm_types_left[-1].pop(storithm_type)
+        return storithm_type
+
+    def _sample_position(self):
+        distance = self._horizon + choice([0, 0, 0, 1, 1, 2, 2])  # hardcoded
+        return len(self._interpretation) - distance - 1
 
     def _importance_for_reward(self, reward):
         predictor = Predictor()
-        prediction = Prediction()
-        prediction.predictors = [predictor]
-        prediction.fit(reward, self._sample_weight)
+        Estimator.fit([predictor], reward, self._sample_weight)
         return predictor.importance()
 
     def _fit(self):
@@ -175,23 +209,26 @@ class RLAgent:
             return None
         start = self._external_actions_positions[-self._horizon - 2]
         end = self._external_actions_positions[-self._horizon - 1] - 1
-        return_ = sum(self._rewards[-self._horizon - 1:])
+        return_ = self._returns[-1]
         for tour in range(start, end):
-            prediction = Prediction()
-            prediction.predictors = self._interpretation.predictors_in_cells[
-                tour
-            ]
-            prediction.fit(return_, self._sample_weight)
-            self._update_positions(prediction.predictors)
+            predictors = self._interpretation.predictors_in_cells[tour]
+            Estimator.fit(predictors, return_, self._sample_weight)
+            self._update_positions(predictors)
 
     def _update_positions(self, predictors):
         for predictor in predictors:
             position = self._sorted_predictors.update_position(predictor)
             if position is None:
-                predictor.storithm.predictors.pop(predictor.distance, None)
-                if not predictor.storithm.predictors:
-                    self._storithms.pop(predictor.storithm)
-                    predictor.storithm.disconnect_with_children()
+                storithm = predictor.storithm
+                storithm.predictors.pop(predictor.distance, None)
+                if not storithm.predictors and not storithm.parent_pointers:
+                    self._remove_storithm(storithm)
+
+    def _remove_storithm(self, storithm):
+        self._storithms.pop(storithm)
+        storithm.disconnect_with_children()
+        if isinstance(storithm, Atom):
+            self._atoms.pop(storithm)
 
         # prediction_occurrences = self._prediction_occurrences[
         #     self._current_tour - self._horizon
@@ -210,10 +247,15 @@ class RLAgent:
         self._sample_weight *= self.time_importance_factor
 
     def _prepare_before_act_internally(self):
+        internal_observation = self._memory.internal_observation()
+        self._interpretation.internal_trajectory.observations.append(
+            internal_observation
+        )
         self._interpretation.extend()
-        internal_observation = self._memory.internal_observation().tolist()
-        for state_id, value in enumerate(internal_observation):
-            self._interpretation.add_at_the_end(StateAtom(state_id, value))
+        for atom in self._atoms:
+            if isinstance(atom, StateAtom):
+                if internal_observation[atom.state_id] == atom.value:
+                    self._interpretation.add_at_the_end(atom)
 
     def _act_internally(self):
         action_values = self._predict()
@@ -226,16 +268,26 @@ class RLAgent:
         action_values = {}
         for action in actions:
             simulation = deepcopy(self._interpretation)
-            simulation.add_at_the_end(ActionAtom(action))
+            action_atom = self._atoms[ActionAtom(action)]
+            simulation.internal_trajectory.actions.append(action)
+            simulation.add_at_the_end(action_atom)
             simulation.interpret()
             self._interpretation_cache[action] = simulation
-            prediction = Prediction()
-            prediction.predictors = simulation.predictors_at_the_end()
-            action_values[action] = prediction.predict()
+            predictors = simulation.predictors_at_the_end()
+            action_values[action] = Estimator.predict(predictors)
         return action_values
 
     def _choose(self, action_values):
-        return Action()
+        actions = action_values.keys()
+        logits = action_values.values()
+        probabilities = self._softmax(logits)
+        action = actions[choice(range(len(action_values)), p=probabilities)]
+        return action
+
+    def _softmax(self, logits):
+        exponentials = [exp(logit) for logit in logits]
+        exponentials_sum = sum(exponentials)
+        return [exponential / exponentials_sum for exponential in exponentials]
 
     def _prepare_after_act_internally(self, action):
         self._interpretation = self._interpretation_cache[action]
@@ -330,6 +382,13 @@ class RLAgent:
     @staticmethod
     def _convert_to_actions_dict(actions_list):
         return {action.id: action for action in actions_list}
+
+    def _prepare_create_storithm_types(self, create_storithm_types):
+        default_create_storithm_types = [
+            {StateAtom: 30, ActionAtom: 3},
+            {Procedure: 200}
+        ]
+        return create_storithm_types or default_create_storithm_types
 
     def _prepare_internal_actions(
             self, internal_actions,

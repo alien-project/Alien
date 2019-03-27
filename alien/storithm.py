@@ -1,7 +1,6 @@
-from prediction import Predictor
 from trajectory import StorithmOccurrence
-from random import choice
 from helpers import AutoIncrementId
+from random import choice, randint
 
 
 class Storithm:
@@ -115,8 +114,11 @@ class ActionAtom(Atom):
         self.action = action
         super().__init__(predictors)
 
-    def create(self, interpretation, sample_distance):
-
+    @staticmethod
+    def create(interpretation, sample_position):
+        position = sample_position()
+        action = interpretation.internal_trajectory.actions[position]
+        return StorithmOccurrence(ActionAtom(action), position, position)
 
     def __str__(self):
         return "a_" + str(self.action.id)
@@ -135,6 +137,15 @@ class StateAtom(Atom):
         self.state_id = state_id
         self.value = value
         super().__init__(predictors)
+
+    @staticmethod
+    def create(interpretation, sample_position):
+        position = sample_position()
+        observation = interpretation.internal_trajectory.observations[position]
+        state_id = randint(0, len(observation) - 1)
+        value = observation[state_id]
+        atom = StateAtom(state_id, value)
+        return StorithmOccurrence(atom, position, position)
 
     def __str__(self):
         return "s_" + str(self.state_id) + "_" + str(self.value)
@@ -155,20 +166,11 @@ class Procedure(Storithm):
         super().__init__(children, predictors)
 
     @staticmethod
-    def propose_new(interpretation, margin, impact_discount_factor):
-        distance_sampling_base = Procedure._distance_sampling_base(
-            impact_discount_factor
-        )
-        distance = margin + choice(distance_sampling_base)
-        first_child_end = len(interpretation) - distance - 2
-        second_child_start = first_child_end + 1
+    def create(interpretation, sample_position):
+        position = sample_position()
         joint_cells = [
-            interpretation.storithm_occurrences_ending_in_cells[
-                first_child_end
-            ],
-            interpretation.storithm_occurrences_starting_in_cells[
-                second_child_start
-            ]
+            interpretation.storithm_occurrences_ending_in_cells[position - 1],
+            interpretation.storithm_occurrences_starting_in_cells[position]
         ]
         if joint_cells[0] == [] or joint_cells[1] == []:
             return None
@@ -181,16 +183,14 @@ class Procedure(Storithm):
             first_child_occurrence.storithm,
             second_child_occurrence.storithm
         ]
-        margin_cell = len(interpretation) - margin - 1
-        distance = margin_cell - second_child_occurrence.end
         return StorithmOccurrence(
-            Procedure(children, {distance: Predictor()}),
+            Procedure(children),
             first_child_occurrence.start,
             second_child_occurrence.end,
             found_by
         )
 
-    def connect_with_children(self):  # test
+    def connect_with_children(self):
         for i in self._unconnected_children:
             for j, child in enumerate(self._unconnected_children[i]):
                 child.add_parent(self, (i, j))
@@ -207,7 +207,7 @@ class Procedure(Storithm):
     def merge(self, proposed_storithm):  # test
         super().merge(proposed_storithm)
         # optimization to do: use binary search for children,
-        # sorted by storithm id
+        # sorted by storithm id (change it to SortedSet and it's ok)
         unpacked_children = proposed_storithm.children[0]
         if unpacked_children in self.children:
             return None
@@ -216,10 +216,11 @@ class Procedure(Storithm):
         self.connected_with_children = False
 
     def check_occurrence(self, interpretation, child_occurrence, position):
-        if position == 0:
+        if position[1] == 0:
             start = child_occurrence.end + 1
+            second_child = self.children[position[0]][1]
             second_child_occurrence = interpretation.\
-                find_storithm_occurrence_starting_in(self.children[1], start)
+                find_storithm_occurrence_starting_in(second_child, start)
             if second_child_occurrence:
                 return StorithmOccurrence(
                     self,
@@ -227,10 +228,11 @@ class Procedure(Storithm):
                     second_child_occurrence.end
                 )
 
-        if position == 1:
+        if position[1] == 1:
             end = child_occurrence.start - 1
+            second_child = self.children[position[0]][0]
             second_child_occurrence = interpretation.\
-                find_storithm_occurrence_ending_in(self.children[0], end)
+                find_storithm_occurrence_ending_in(second_child, end)
             if second_child_occurrence:
                 return StorithmOccurrence(
                     self,
@@ -239,10 +241,6 @@ class Procedure(Storithm):
                 )
 
         return None
-
-    @staticmethod
-    def _distance_sampling_base(impact_discount_factor):
-        return [0, 0, 0, 1, 1, 2, 2]  # for now, it's hardcoded
 
     def __str__(self):
         first_child = self.children[0][0]
@@ -254,6 +252,22 @@ class Procedure(Storithm):
             return (
                 self.__class__ == other.__class__ and
                 str(self) == str(other)
+            )
+        return self.id == other.id
+
+
+class Condition(Storithm):
+    def __init__(self, condition_child, body_child, predictors=None):
+        super().__init__([condition_child, body_child], predictors)
+
+    def check_occurrence(self, interpretation, child_occurrence, position):
+        return None
+
+    def __eq__(self, other):
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                self.children == other.children
             )
         return self.id == other.id
 

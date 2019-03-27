@@ -1,4 +1,5 @@
 from helpers import AutoIncrementId
+from math import log
 
 
 class BasePredictor:
@@ -10,8 +11,11 @@ class BasePredictor:
     def importance(self):
         raise NotImplementedError
 
-    def confidence(self):
-        raise NotImplementedError
+    # def confidence(self):
+    #     raise NotImplementedError
+
+    def __eq__(self, other):
+        return self.same(other)
 
     def same(self, other):
         a_dict = self.__dict__.copy()
@@ -24,17 +28,41 @@ class BasePredictor:
         )
 
 
+class BaseEstimator:
+    @staticmethod
+    def fit(predictors, value, sample_weight=1):
+        raise NotImplementedError
+
+    @staticmethod
+    def predict(predictors):
+        raise NotImplementedError
+
+
 class Predictor(BasePredictor):
-    def __init__(self, coefficient=0, confidence=0, id_=None):
-        self.coefficient = coefficient
-        self.confidence_ = confidence
+    def __init__(self, mean=0, variance=0, confidence=0, id_=None):
+        self.mean = mean
+        self.variance = variance
+        self.confidence = confidence
+        self.sum = self.variance * self.confidence
         super().__init__(id_)
+
+    def variance_value(self):
+        if self.confidence == 0:
+            return 0
+        variance_confidence = min(
+            Estimator.a * log(self.confidence, Estimator.b),
+            Estimator.max_variance_confidence
+        )
+        return (
+            variance_confidence * self.variance / self.mean ** 2 +
+            (1 - variance_confidence) * Estimator.mean_variance_ratio
+        )
 
     def importance(self):
         return 0
 
-    def confidence(self):
-        return self.confidence_
+    # def confidence(self):
+    #     return self.confidence_
 
     def __eq__(self, other):
         return (
@@ -43,42 +71,39 @@ class Predictor(BasePredictor):
         )
 
 
-class Prediction:
-    def __init__(self):
-        self.predictors = []
-        self.activations = []
-        self.estimation = 0
+class Estimator(BaseEstimator):
+    a = 0.5
+    b = 2
+    mean_variance_ratio = 0.9
+    max_variance_confidence = 0.99
 
-    def add_predictor(self, predictor, activation):
-        self.predictors.append(predictor)
-        self.activations.append(activation)
-        self.estimation = None
-
-    def fit(self, true_value, sample_weight=1):
-        if self.estimation is None:
-            self.predict()
-        for key, predictor in self.predictors:
-            predictor.coefficient = (
+    @staticmethod
+    def fit(predictors, value, sample_weight=1):
+        for predictor in predictors:
+            old_mean = predictor.mean
+            predictor.mean = (
                 (
-                    predictor.coefficient * predictor.confidence +
-                    predictor.coefficient * true_value / self.estimation *
-                    self.activations[key] * sample_weight
+                    predictor.mean * predictor.confidence +
+                    value * sample_weight
                 ) /
-                (predictor.confidence + self.activations[key] * sample_weight)
+                (predictor.confidence + sample_weight)
             )
-            predictor.confidence += self.activations[key] * sample_weight
+            predictor.confidence += sample_weight
+            predictor.sum += (
+                (value - old_mean) *
+                (value - predictor.mean) *
+                sample_weight
+            )
+            predictor.variance = predictor.sum / predictor.confidence
 
-    def predict(self):
-        equation_top = 0
-        equation_bottom = 0
-        for key, predictor in enumerate(self.predictors):
-            equation_top += (
-                predictor.coefficient *
-                predictor.confidence *
-                self.activations[key]
+    @staticmethod
+    def predict(predictors):
+        top = 0
+        bottom = 0
+        for predictor in predictors:
+            top += (
+                predictor.mean * predictor.confidence /
+                predictor.variance_value()
             )
-            equation_bottom += predictor.confidence * self.activations[key]
-        self.estimation = (
-            equation_top / equation_bottom if equation_bottom != 0 else 0
-        )
-        return self.estimation
+            bottom += predictor.confidence / predictor.variance_value()
+        return top / bottom

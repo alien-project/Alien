@@ -3,10 +3,28 @@ from trajectory import Interpretation, StorithmOccurrence
 from prediction import Predictor
 from rl_agent import Action
 from helpers import same
-from random import seed
+from random import seed, choice
 
 
-def test_procedure_propose_new():
+def test_state_atom_create():
+    trial_count = 5000
+    seed(500)
+
+    interpretation = Interpretation()
+    interpretation.internal_trajectory.observations = [[0, 1], [1, 1]]
+    interpretation.internal_trajectory.actions = [Action(0)]
+
+    expected_proposal = StorithmOccurrence(StateAtom(0, 1), 1, 1)
+    proposed = False
+    for i in range(trial_count):
+        proposal = StateAtom.create(interpretation, lambda: choice([0, 1]))
+        if same(proposal, expected_proposal):
+            proposed = True
+            break
+    assert proposed
+
+
+def test_procedure_create():
     trial_count = 5000
     seed(500)
 
@@ -18,15 +36,15 @@ def test_procedure_propose_new():
         StateAtom(0, 0),
         StateAtom(0, 0)
     ]
-    procedure = Procedure([atoms[1], atoms[2]])
+    procedure = Procedure([[atoms[1], atoms[2]]])
     procedure_occurrence = StorithmOccurrence(procedure, 1, 2)
     for atom in atoms:
         interpretation.extend(atom)
     interpretation.add(procedure_occurrence)
 
-    expected_found_by = [atoms[0], procedure]
     expected_children = [[atoms[0], procedure]]
-    expected_storithm = Procedure(expected_children, {1: Predictor()})
+    expected_storithm = Procedure(expected_children)
+    expected_found_by = [atoms[0], procedure]
     expected_proposal = StorithmOccurrence(
         expected_storithm,
         0,
@@ -35,8 +53,8 @@ def test_procedure_propose_new():
     )
     proposed = False
     for i in range(trial_count):
-        proposal = Procedure.propose_new(interpretation, 1, 3)
-        if same(proposal, expected_proposal):  # predictors ids are different
+        proposal = Procedure.create(interpretation, lambda: choice([1, 2, 3]))
+        if same(proposal, expected_proposal):
             proposed = True
             break
     assert proposed
@@ -58,27 +76,27 @@ def test_procedure_propose_new():
 #     return False
 
 
-# def test_procedure_check_occurrence():
-#     interpretation = Interpretation()
-#     atoms = [
-#         StateAtom(1, 1),
-#         StateAtom(0, 1),
-#         ActionAtom(Action()),
-#         StateAtom(0, 0)
-#     ]
-#     for atom in atoms:
-#         interpretation.extend(atom)
-#     procedure = Procedure([atoms[1], atoms[2]])
-#     procedure.connect_with_children()
-#     child_occurrence = StorithmOccurrence(atoms[2], 2, 2)
-#
-#     expected_occurrence = StorithmOccurrence(procedure, 1, 2)
-#     occurrence = procedure.check_occurrence(
-#         interpretation,
-#         child_occurrence,
-#         1
-#     )
-#     assert expected_occurrence == occurrence
+def test_procedure_check_occurrence():
+    interpretation = Interpretation()
+    atoms = [
+        StateAtom(1, 1),
+        StateAtom(0, 1),
+        ActionAtom(Action()),
+        StateAtom(0, 0)
+    ]
+    for atom in atoms:
+        interpretation.extend(atom)
+    procedure = Procedure([[atoms[1], atoms[2]]])
+    procedure.connect_with_children()
+    child_occurrence = StorithmOccurrence(atoms[2], 2, 2)
+
+    expected_occurrence = StorithmOccurrence(procedure, 1, 2)
+    occurrence = procedure.check_occurrence(
+        interpretation,
+        child_occurrence,
+        (0, 1)
+    )
+    assert expected_occurrence == occurrence
 
 
 def test_procedure_str():

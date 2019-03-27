@@ -10,7 +10,7 @@ class Interpretation:
         # self.storithm_occurrences_in_cells = [] it seems that it's not needed
         self.storithm_occurrences_starting_in_cells = []
         self.storithm_occurrences_ending_in_cells = []
-        self.predictors_in_cells = []
+        self.predictors_in_cells = {}
 
     def extend(self, atom=None):
         if atom:
@@ -22,7 +22,7 @@ class Interpretation:
             self.storithm_occurrences_starting_in_cells.append([])
             self.storithm_occurrences_ending_in_cells.append([])
 
-    def add(self, occurrence):
+    def add(self, occurrence, temporary=False):
         self.storithm_occurrences.append(occurrence)
         self.storithm_occurrences_starting_in_cells[occurrence.start].append(
             occurrence
@@ -30,6 +30,14 @@ class Interpretation:
         self.storithm_occurrences_ending_in_cells[occurrence.end].append(
             occurrence
         )
+        for distance, predictor in occurrence.storithm.predictors.items():
+            position = occurrence.end + distance
+            if position not in self.predictors_in_cells:
+                self.predictors_in_cells[position] = []
+            self.predictors_in_cells[position].append(predictor)
+
+    def add_temporary(self, occurrence):
+        self.add(occurrence, True)
 
     def add_at_the_end(self, storithm, occurrence_length=1):
         start = len(self) - occurrence_length
@@ -88,13 +96,17 @@ class Interpretation:
         return new
 
     def __len__(self):
-        return len(self.storithm_occurrences_starting_in_cells)
+        return max(
+            len(self.internal_trajectory.observations),
+            len(self.internal_trajectory.actions),
+            len(self.storithm_occurrences_starting_in_cells)
+        )
 
 
 class InternalTrajectory:
-    def __init__(self, observations, actions):
-        self.observations = observations
-        self.actions = actions
+    def __init__(self, observations=None, actions=None):
+        self.observations = observations or []
+        self.actions = actions or []
 
 
 class StorithmOccurrence:

@@ -1,15 +1,16 @@
 from trajectory import StorithmOccurrence
 from helpers import AutoIncrementId
-from random import choice, randint
+from random import choice, randint, sample
 
 
 class Storithm:
-    def __init__(self, children, predictors=None, id_=None):
+    def __init__(self, children, predictors=None):
         self.children = children
         self.parent_pointers = []
         self.predictors = predictors or {}
         self.connected_with_children = False
-        self.id = id_
+        self.id = None
+        self._hash_cache = None
         # self.importance = 0
         # self.predictors_importance = 0
         # self.parents_importance = 0
@@ -73,7 +74,9 @@ class Storithm:
         raise NotImplementedError
 
     def __hash__(self):
-        return hash(str(self))
+        if not self._hash_cache:
+            self._hash_cache = hash(str(self))
+        return self._hash_cache
 
 
 class ParentPointer:
@@ -108,6 +111,9 @@ class Atom(Storithm):
     def __eq__(self, other):
         raise NotImplementedError
 
+    def __hash__(self):
+        return super().__hash__()
+
 
 class ActionAtom(Atom):
     def __init__(self, action, predictors=None):
@@ -131,6 +137,9 @@ class ActionAtom(Atom):
             )
         return self.id == other.id
 
+    def __hash__(self):
+        return super().__hash__()
+
 
 class StateAtom(Atom):
     def __init__(self, state_id, value, predictors=None):
@@ -148,7 +157,7 @@ class StateAtom(Atom):
         return StorithmOccurrence(atom, position, position)
 
     def __str__(self):
-        return "s_" + str(self.state_id) + "_" + str(self.value)
+        return "s_" + str(self.state_id) + "_" + str(int(self.value))
 
     def __eq__(self, other):
         if self.id is None or other.id is None:
@@ -158,6 +167,9 @@ class StateAtom(Atom):
                 self.value == other.value
             )
         return self.id == other.id
+
+    def __hash__(self):
+        return super().__hash__()
 
 
 class Procedure(Storithm):
@@ -169,13 +181,13 @@ class Procedure(Storithm):
     def create(interpretation, sample_position):
         position = sample_position()
         joint_cells = [
-            interpretation.storithm_occurrences_ending_in_cells[position - 1],
-            interpretation.storithm_occurrences_starting_in_cells[position]
+            interpretation.storithm_occurrences_ending[position - 1],
+            interpretation.storithm_occurrences_starting[position]
         ]
-        if joint_cells[0] == [] or joint_cells[1] == []:
+        if not joint_cells[0] or not joint_cells[1]:
             return None
-        first_child_occurrence = choice(joint_cells[0])
-        second_child_occurrence = choice(joint_cells[1])
+        first_child_occurrence, = sample(joint_cells[0], 1)
+        second_child_occurrence, = sample(joint_cells[1], 1)
         children = [
             [first_child_occurrence.storithm, second_child_occurrence.storithm]
         ]
@@ -255,10 +267,16 @@ class Procedure(Storithm):
             )
         return self.id == other.id
 
+    def __hash__(self):
+        return super().__hash__()
+
 
 class Condition(Storithm):
     def __init__(self, condition_child, body_child, predictors=None):
         super().__init__([condition_child, body_child], predictors)
+
+    def create(self, interpretation, sample_position):
+        
 
     def check_occurrence(self, interpretation, child_occurrence, position):
         return None
@@ -270,6 +288,9 @@ class Condition(Storithm):
                 self.children == other.children
             )
         return self.id == other.id
+
+    def __hash__(self):
+        return super().__hash__()
 
 
 class Loop(Storithm):
@@ -287,6 +308,9 @@ class Loop(Storithm):
             )
         return self.id == other.id
 
+    def __hash__(self):
+        return super().__hash__()
+
 
 class Fusion(Storithm):
     def check_occurrence(self, interpretation, child_occurrence, position):
@@ -299,3 +323,6 @@ class Fusion(Storithm):
                 self.children == other.children
             )
         return self.id == other.id
+
+    def __hash__(self):
+        return super().__hash__()

@@ -1,5 +1,6 @@
 from helpers import AutoIncrementId
 from math import log
+from storithm import ActionAtom
 
 
 class BasePredictor:
@@ -7,15 +8,13 @@ class BasePredictor:
         self.storithm = None
         self.distance = None
         self.id = AutoIncrementId.generate(id_)
+        self._hash_cache = None
 
     def importance(self):
         raise NotImplementedError
 
     # def confidence(self):
     #     raise NotImplementedError
-
-    def __eq__(self, other):
-        return self.same(other)
 
     def same(self, other):
         a_dict = self.__dict__.copy()
@@ -26,6 +25,23 @@ class BasePredictor:
             self.__class__ == other.__class__ and
             a_dict == b_dict
         )
+
+    def __lt__(self, other):
+        return self.importance() < other.importance()
+
+    def __gt__(self, other):
+        return self.importance() > other.importance()
+
+    def __eq__(self, other):
+        if self.storithm and other.storithm:
+            return (
+                self.storithm == other.storithm and
+                self.distance == other.distance
+            )
+        return self.same(other)
+
+    def __hash__(self):
+        return self.id
 
 
 class BaseEstimator:
@@ -48,14 +64,21 @@ class Predictor(BasePredictor):
 
     def variance_value(self):
         if self.confidence == 0:
-            return 0
+            return Estimator.MEAN_VARIANCE_RATIO
         variance_confidence = min(
-            Estimator.a * log(self.confidence, Estimator.b),
-            Estimator.max_variance_confidence
+            (
+                Estimator.VARIANCE_CONFIDENCE_MULTIPLIER *
+                log(self.confidence, Estimator.VARIANCE_CONFIDENCE_BASE)
+            ),
+            Estimator.ALMOST_ONE
         )
         return (
-            variance_confidence * self.variance / self.mean ** 2 +
-            (1 - variance_confidence) * Estimator.mean_variance_ratio
+            (
+                variance_confidence *
+                self.variance /
+                max(self.mean ** 2, Estimator.ALMOST_ONE)
+            ) +
+            (1 - variance_confidence) * Estimator.MEAN_VARIANCE_RATIO
         )
 
     def importance(self):
@@ -64,22 +87,25 @@ class Predictor(BasePredictor):
     # def confidence(self):
     #     return self.confidence_
 
-    def __eq__(self, other):
-        return (
-            self.__class__ == other.__class__ and
-            self.__dict__ == other.__dict__
-        )
-
 
 class Estimator(BaseEstimator):
-    a = 0.5
-    b = 2
-    mean_variance_ratio = 0.9
-    max_variance_confidence = 0.99
+    VARIANCE_CONFIDENCE_MULTIPLIER = 0.5
+    VARIANCE_CONFIDENCE_BASE = 2
+    MEAN_VARIANCE_RATIO = 0.9
+    ALMOST_ZERO = 0.01
+    ALMOST_ONE = 0.99
 
     @staticmethod
     def fit(predictors, value, sample_weight=1):
         for predictor in predictors:
+            if (
+                isinstance(predictor.storithm, ActionAtom) and
+                predictor.storithm.action.id == 0 and
+                predictor.distance == 0 and
+                value == 1
+            ):
+                a = 5
+
             old_mean = predictor.mean
             predictor.mean = (
                 (
@@ -106,4 +132,4 @@ class Estimator(BaseEstimator):
                 predictor.variance_value()
             )
             bottom += predictor.confidence / predictor.variance_value()
-        return top / bottom
+        return top / bottom if bottom > 0 else 0

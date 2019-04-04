@@ -60,7 +60,7 @@ class Tape:
         self.values[self.pointer] = value
 
     def get_indicated_value(self):
-        return self.values[self.pointer]
+        return int(self.values[self.pointer])
 
     def increment_pointer(self, axis=None):
         if isinstance(self.pointer, tuple):

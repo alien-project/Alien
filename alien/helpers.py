@@ -1,66 +1,102 @@
-class SortedLimitedList:
-    """A normal list but sorted and with size limit.
+class LimitedSet:
+    """Set with a limit of how many elements it can have.
 
-    If the size is exceeded, then the elements with the lowest values
-    are automatically removed.
+    If the limit is exceeded, the lowest value is removed. The elements
+    have to be hashable (__eq__ and __hash__) and comparable (at least
+    __lt__ has to be defined).
+
+    This data structure is created with the purpose to be fast at
+    adding an element, updating an element and removing the lowest
+    element. It has time complexity O(log n) for all of these operations
+    thanks to using heap internally.
     """
-    def __init__(self, limit, comparison=lambda a, b: a > b):
+    def __init__(self, limit):
         self.limit = limit
-        self.comparison = comparison
+        self._heap = []
+        self._positions = {}
 
-    def __getitem__(self, item):
-        pass
+    def add(self, element):
+        if element in self._positions:
+            return None
+        limit_reached = (len(self._heap) == self.limit)
+        lower_than_lowest = (
+            self.lowest_element() and
+            element < self.lowest_element()
+        )
+        if limit_reached and lower_than_lowest:
+            return element
 
-    def __setitem__(self, key, value):
-        pass
+        self._heap.append(element)
+        position = self._heapify_up(len(self._heap) - 1)
+        self._positions[element] = position
+        if len(self._heap) > self.limit:
+            return self.pop()
+        return None
 
-    def __add__(self, other):
-        pass
+    def pop(self):
+        returned = self._heap[0]
+        self._swap(0, len(self._heap) - 1)
+        self._positions.pop(self._heap[-1])
+        self._heap.pop()
+        self._heapify_down(0)
+        return returned
 
-    def add(self, element, assume_value=None):
-        """Add a new element.
+    def update(self, element):
+        if element not in self._positions:
+            return self.add(element)
+        self._heap[self._positions[element]] = element
+        self._heapify(self._positions[element])
+        return None
 
-        It adds a new elements and removes the last one if the size
-        limit is exceeded. If assume_value is defined, it will use that
-        value to compare the element to other elements in the list to
-        find its position.
-        """
-        pass
+    def lowest_element(self):
+        return self._heap[0] if self._heap else None
 
-    def update_position(self, element):
-        """Updates position of an element in the list.
+    def _heapify_up(self, element_position):
+        if element_position == 0:
+            return 0
+        parent_position = (element_position - 1) // 2
+        if self._heap[element_position] < self._heap[parent_position]:
+            self._swap(element_position, parent_position)
+            return self._heapify_up(parent_position)
+        return element_position
 
-        Returns new position in the list, if the element is removed
-        from the list because its value is too low, then it returns
-        None.
+    def _heapify_down(self, element_position):
+        left = 2 * element_position + 1
+        right = 2 * element_position + 2
+        lowest = element_position
+        if left < len(self._heap) and self._heap[left] < self._heap[lowest]:
+            lowest = left
+        if right < len(self._heap) and self._heap[right] < self._heap[lowest]:
+            lowest = right
+        if lowest != element_position:
+            self._swap(element_position, lowest)
+            return self._heapify_down(lowest)
+        return element_position
 
-        Element is required to have 'id' attribute and should have had
-        this attribute when adding by add() method. If the element is
-        not in the list yet, then it adds a new element.
+    def _heapify(self, element_position):
+        self._heapify_up(element_position)
+        self._heapify_down(element_position)
 
-        To do: you can use id() instead of 'id' attribute, but then you
-        need to update dictionary with positions for ids when
-        unpickling everything. Maybe __setstate__ or __getstate__ might
-        be useful. Consider using hash()
-        """
+    def _swap(self, i, j):
+        self._positions[self._heap[i]] = j
+        self._positions[self._heap[j]] = i
+        self._heap[i], self._heap[j] = self._heap[j], self._heap[i]
 
-    def position(self, element):
-        """Returns the position that the element would have.
+    def __contains__(self, item):
+        return item in self._positions
 
-        It doesn't add the element to the list, but returns what would
-        be the position if you add the element.
-        """
+    def __len__(self):
+        return len(self._heap)
 
-    def acceptable(self, element):
-        """Return if element would be accepted to the list."""
-
-    def is_full(self):
-        """Return if the list has reached the limit."""
-        return False
-
-    def last(self):
-        """Return the last element of list."""
-        return 0
+    def __str__(self):
+        if not len(self):
+            return "Empty limited set"
+        return (
+            "Lowest: " +
+            str(self.lowest_element()) +
+            ", Count: " +
+            str(len(self))
+        )
 
 
 class AutoIncrementId:

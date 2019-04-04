@@ -60,22 +60,6 @@ def test_procedure_create():
     assert proposed
 
 
-# def test_storithm_connect_with_children():
-#     atoms = [StateAtom(1, 1), StateAtom(0, 1)]
-#     procedure = Procedure([atoms[0], atoms[1]])
-#     procedure.connect_with_children()
-#
-#     assert storithm_has_parent(atoms[0], procedure)
-#     assert storithm_has_parent(atoms[1], procedure)
-#
-#
-# def storithm_has_parent(storithm, parent):
-#     for pointer in storithm.parent_pointers:
-#         if pointer.parent == parent:
-#             return True
-#     return False
-
-
 def test_procedure_check_occurrence():
     interpretation = Interpretation()
     atoms = [

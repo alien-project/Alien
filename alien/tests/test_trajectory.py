@@ -2,38 +2,32 @@ from trajectory import *
 from storithm import StateAtom, ActionAtom, Procedure
 from prediction import Predictor
 from rl_agent import Action
-from copy import deepcopy
 
 
 def test_interpretation_extend():
+    StateAtom(1, 0).__hash__()
+
     interpretation = Interpretation()
     atoms = [StateAtom(1, 1), StateAtom(0, 1), ActionAtom(Action())]
     for atom in atoms:
         interpretation.extend(atom)
     interpretation.extend()
 
-    expected_occurrences = [
-        StorithmOccurrence(atoms[0], 0, 0),
-        StorithmOccurrence(atoms[1], 1, 1),
-        StorithmOccurrence(atoms[2], 2, 2)
-    ]
-    assert expected_occurrences == interpretation.storithm_occurrences
-
     expected_starting_in_cells = [
-        [expected_occurrences[0]],
-        [expected_occurrences[1]],
-        [expected_occurrences[2]],
-        []
+        {StorithmOccurrence(atoms[0], 0, 0)},
+        {StorithmOccurrence(atoms[1], 1, 1)},
+        {StorithmOccurrence(atoms[2], 2, 2)},
+        set()
     ]
     assert (
         expected_starting_in_cells ==
-        interpretation.storithm_occurrences_starting_in_cells
+        interpretation.storithm_occurrences_starting
     )
 
     expected_ending_in_cells = expected_starting_in_cells
     assert (
         expected_ending_in_cells ==
-        interpretation.storithm_occurrences_ending_in_cells
+        interpretation.storithm_occurrences_ending
     )
 
 
@@ -41,54 +35,106 @@ def test_interpretation_add():
     interpretation = Interpretation()
     atoms = [StateAtom(1, 1), StateAtom(0, 1), ActionAtom(Action())]
     predictor = Predictor()
-    procedure = Procedure([atoms[1], atoms[2]], {2: predictor})
+    procedure = Procedure([[atoms[1], atoms[2]]], {2: predictor})
     occurrence = StorithmOccurrence(procedure, 1, 2)
     for atom in atoms:
         interpretation.extend(atom)
     interpretation.add(occurrence)
 
-    expected_occurrences = [
-        StorithmOccurrence(atoms[0], 0, 0),
-        StorithmOccurrence(atoms[1], 1, 1),
-        StorithmOccurrence(atoms[2], 2, 2),
-        occurrence
-    ]
-    assert expected_occurrences == interpretation.storithm_occurrences
-
-    expected_starting_in_cells = [
-        [expected_occurrences[0]],
-        [expected_occurrences[1], occurrence],
-        [expected_occurrences[2]]
+    expected_starting_in_cells_1 = [
+        {StorithmOccurrence(atoms[0], 0, 0)},
+        {
+            StorithmOccurrence(atoms[1], 1, 1),
+            StorithmOccurrence(procedure, 1, 2)
+        },
+        {StorithmOccurrence(atoms[2], 2, 2)}
     ]
     assert (
-        expected_starting_in_cells ==
-        interpretation.storithm_occurrences_starting_in_cells
+        expected_starting_in_cells_1 ==
+        interpretation.storithm_occurrences_starting
     )
 
-    expected_ending_in_cells = [
-        [expected_occurrences[0]],
-        [expected_occurrences[1]],
-        [expected_occurrences[2], occurrence]
+    expected_ending_in_cells_1 = [
+        {StorithmOccurrence(atoms[0], 0, 0)},
+        {StorithmOccurrence(atoms[1], 1, 1)},
+        {
+            StorithmOccurrence(atoms[2], 2, 2),
+            StorithmOccurrence(procedure, 1, 2)
+        }
     ]
     assert (
-        expected_ending_in_cells ==
-        interpretation.storithm_occurrences_ending_in_cells
+        expected_ending_in_cells_1 ==
+        interpretation.storithm_occurrences_ending
     )
 
-    expected_predictors_in_cells = {4: [predictor]}
-    assert expected_predictors_in_cells == interpretation.predictors_in_cells
+    expected_predictor_occurrences = {4: {predictor}}
+    assert expected_predictor_occurrences == interpretation.predictor_occurrences
 
+    procedure2 = Procedure([[atoms[0], atoms[1]]], {1: predictor})
+    occurrence = StorithmOccurrence(procedure2, 0, 1)
+    interpretation.add(occurrence, True)
 
-def test_interpretation_deepcopy():
-    interpretation = Interpretation()
-    atoms = [StateAtom(1, 1), StateAtom(0, 1), ActionAtom(Action())]
-    for atom in atoms:
-        interpretation.extend(atom)
-    copy = deepcopy(interpretation)
+    expected_starting_in_cells_2 = [
+        {
+            StorithmOccurrence(atoms[0], 0, 0),
+            StorithmOccurrence(procedure2, 0, 1)
+        },
+        {
+            StorithmOccurrence(atoms[1], 1, 1),
+            StorithmOccurrence(procedure, 1, 2)
+        },
+        {StorithmOccurrence(atoms[2], 2, 2)}
+    ]
+    assert (
+        expected_starting_in_cells_2 ==
+        interpretation.storithm_occurrences_starting
+    )
 
-    occurrence = StorithmOccurrence(Procedure([atoms[1], atoms[2]]), 1, 2)
-    copy.add(occurrence)
-    assert 3 == len(interpretation.storithm_occurrences)
+    expected_ending_in_cells_2 = [
+        {StorithmOccurrence(atoms[0], 0, 0)},
+        {
+            StorithmOccurrence(atoms[1], 1, 1),
+            StorithmOccurrence(procedure2, 0, 1)
+        },
+        {
+            StorithmOccurrence(atoms[2], 2, 2),
+            StorithmOccurrence(procedure, 1, 2)
+        }
+    ]
+    assert (
+        expected_ending_in_cells_2 ==
+        interpretation.storithm_occurrences_ending
+    )
+
+    expected_temporary_occurrences = [StorithmOccurrence(procedure2, 0, 1)]
+    assert (
+        expected_temporary_occurrences ==
+        interpretation.temporary_occurrences
+    )
+
+    interpretation.clean_temporary()
+
+    assert [] == interpretation.temporary_occurrences
+    assert (
+        expected_starting_in_cells_1 ==
+        interpretation.storithm_occurrences_starting
+    )
+    assert (
+        expected_ending_in_cells_1 ==
+        interpretation.storithm_occurrences_ending
+    )
+
+    interpretation.add([occurrence])
+    interpretation.clean_temporary()
+
+    assert (
+        expected_starting_in_cells_2 ==
+        interpretation.storithm_occurrences_starting
+    )
+    assert (
+        expected_ending_in_cells_2 ==
+        interpretation.storithm_occurrences_ending
+    )
 
 
 def test_interpretation_interpret():
@@ -98,10 +144,22 @@ def test_interpretation_interpret():
         interpretation.extend(atom)
     procedure = Procedure([[atoms[1], atoms[2]]])
     procedure.connect_with_children()
-    interpretation.interpret()
+    interpretation.interpret(True)
 
     occurrence = StorithmOccurrence(Procedure([[atoms[1], atoms[2]]]), 1, 2)
-    assert occurrence in interpretation.storithm_occurrences
+    starting_cell = interpretation.storithm_occurrences_starting[1]
+    assert occurrence in starting_cell
+    ending_cell = interpretation.storithm_occurrences_ending[2]
+    assert occurrence in ending_cell
+
+    interpretation.clean_temporary()
+    assert occurrence not in starting_cell
+    assert occurrence not in ending_cell
+
+    interpretation.interpret()
+    interpretation.clean_temporary()
+    assert occurrence in starting_cell
+    assert occurrence in ending_cell
 
 
 def test_interpretation_find_storithm_occurrence_starting_in():
@@ -134,3 +192,9 @@ def test_interpretation_find_storithm_occurrence_ending_in():
         2
     )
     assert procedure_occurrence == occurrence
+
+
+def test_storithm_occurrence_hash():
+    atom = StateAtom(1, 0)
+    atom.id = 5
+

@@ -1,12 +1,12 @@
 from trajectory import Interpretation
-from helpers import SortedLimitedList, AutoIncrementId
+from helpers import LimitedSet, AutoIncrementId
 from memory import Memory
 from storithm import Procedure, Atom, ActionAtom, StateAtom
-from prediction import BasePredictor, Estimator, Predictor
+from prediction import Estimator, Predictor
 from functools import partial
-from copy import deepcopy
 from numpy import exp
 from numpy.random import choice
+from copy import deepcopy
 
 
 class RLAgent:
@@ -21,7 +21,6 @@ class RLAgent:
         impact_discount_factor=0.5,
         time_importance_factor=1.1,
         create_storithm_types=None,
-        max_storithms_count=5000,
         max_predictors_count=5000,
         memory_tapes_count=2,
         memory_tapes_length=5000,
@@ -47,14 +46,7 @@ class RLAgent:
             starting_points
         )
         self._interpretation = Interpretation()
-        self._sorted_storithms = SortedLimitedList(
-            max_storithms_count,
-            lambda a, b: a.importance() > b.importance()
-        )  # this is not used
-        self._sorted_predictors = SortedLimitedList(
-            max_predictors_count,
-            RLAgent._compare_predictors
-        )
+        self._predictors = LimitedSet(max_predictors_count)
         self._rewards = []
         self._returns = []
         self._current_external_tour = 0
@@ -108,7 +100,7 @@ class RLAgent:
     def _prepare_before_learn(self, reward):
         self._rewards.append(reward)
 
-        previous_return = self._returns[-1]
+        previous_return = self._returns[-1] if self._returns else 0
         reward_before_horizon = (
             self._rewards[-self._horizon - 2]
             if self._current_external_tour > self._horizon
@@ -129,6 +121,7 @@ class RLAgent:
         return_ = self._returns[-1]
         max_new_predictors_count = self._max_new_predictors_count(return_)
         new_predictors_count = 0
+
         storithm_type = self._storithm_type_to_create(True)
         while storithm_type:
             occurrence = storithm_type.create(
@@ -138,7 +131,7 @@ class RLAgent:
             if not occurrence:
                 continue
 
-            self._add_predictor(occurrence)
+            self._add_predictor_to_storithm(occurrence)
 
             if occurrence.storithm in self._storithms:
                 self._storithms[occurrence.storithm].merge(occurrence.storithm)
@@ -151,12 +144,12 @@ class RLAgent:
             self._interpretation.add(occurrence)
 
             new_predictors_count += 1
-            if new_predictors_count >= max_new_predictors_count:
+            if new_predictors_count == max_new_predictors_count:
                 break
 
             storithm_type = self._storithm_type_to_create()
 
-    def _add_predictor(self, occurrence):
+    def _add_predictor_to_storithm(self, occurrence):
         margin_cell = len(self._interpretation) - self._horizon - 1
         distance = margin_cell - occurrence.end
 
@@ -166,10 +159,11 @@ class RLAgent:
         occurrence.storithm.predictors[distance] = predictor
 
     def _max_new_predictors_count(self, return_):
-        importance = self._importance_for_reward(return_)
-        limit = self._sorted_predictors.limit
-        position = self._sorted_predictors.position(importance)
-        return limit - position
+        importance = self._importance_for_return(return_)
+        lowest_element = self._predictors.lowest_element()
+        if not lowest_element or importance <= lowest_element.importance():
+            return self._predictors.limit - len(self._predictors)
+        return None
 
     def _add_storithm(self, storithm):
         storithm.generate_id()
@@ -179,13 +173,15 @@ class RLAgent:
 
     def _storithm_type_to_create(self, first_in_tour=False):
         if first_in_tour:
-            self._create_storithm_types_left = self.create_storithm_types
+            self._create_storithm_types_left = deepcopy(
+                self.create_storithm_types
+            )
+            self._create_storithm_types_left.reverse()
 
         if not self._create_storithm_types_left[-1]:
             self._create_storithm_types_left.pop()
 
         if not self._create_storithm_types_left:
-            self._create_storithm_types_left = self.create_storithm_types
             return None
 
         last_element_keys = self._create_storithm_types_left[-1].keys()
@@ -199,28 +195,28 @@ class RLAgent:
         distance = self._horizon + choice([0, 0, 0, 1, 1, 2, 2])  # hardcoded
         return len(self._interpretation) - distance - 1
 
-    def _importance_for_reward(self, reward):
+    def _importance_for_return(self, return_):
         predictor = Predictor()
-        Estimator.fit([predictor], reward, self._sample_weight)
+        Estimator.fit([predictor], return_, self._sample_weight)
         return predictor.importance()
 
     def _fit(self):
-        if self._current_external_tour <= self._horizon:
+        if self._current_external_tour <= self._horizon + 1:
             return None
-        start = self._external_actions_positions[-self._horizon - 2]
-        end = self._external_actions_positions[-self._horizon - 1] - 1
+        start = self._external_actions_positions[-self._horizon - 2] + 1
+        end = self._external_actions_positions[-self._horizon - 1]
         return_ = self._returns[-1]
-        for tour in range(start, end):
-            predictors = self._interpretation.predictors_in_cells[tour]
+        for tour in range(start, end + 1):
+            predictors = self._interpretation.predictors_in(tour)
             Estimator.fit(predictors, return_, self._sample_weight)
-            self._update_positions(predictors)
+            self._update(predictors)
 
-    def _update_positions(self, predictors):
+    def _update(self, predictors):
         for predictor in predictors:
-            position = self._sorted_predictors.update_position(predictor)
-            if position is None:
-                storithm = predictor.storithm
-                storithm.predictors.pop(predictor.distance, None)
+            removed_predictor = self._predictors.update(predictor)
+            if removed_predictor:
+                storithm = removed_predictor.storithm
+                storithm.predictors.pop(removed_predictor.distance, None)
                 if not storithm.predictors and not storithm.parent_pointers:
                     self._remove_storithm(storithm)
 
@@ -251,7 +247,7 @@ class RLAgent:
         self._interpretation.internal_trajectory.observations.append(
             internal_observation
         )
-        self._interpretation.extend()
+        self._interpretation.extend()  # this should be done by itself
         for atom in self._atoms:
             if isinstance(atom, StateAtom):
                 if internal_observation[atom.state_id] == atom.value:
@@ -267,20 +263,27 @@ class RLAgent:
         actions = self._internal_actions + self._external_actions
         action_values = {}
         for action in actions:
-            simulation = deepcopy(self._interpretation)
-            action_atom = self._atoms[ActionAtom(action)]
-            simulation.internal_trajectory.actions.append(action)
-            simulation.add_at_the_end(action_atom)
-            simulation.interpret()
-            self._interpretation_cache[action] = simulation
-            predictors = simulation.predictors_at_the_end()
+            if ActionAtom(action) in self._atoms:
+                action_atom = self._atoms[ActionAtom(action)]
+                self._interpretation.add_at_the_end_temporarily(action_atom)
+            self._interpretation.interpret_temporarily()
+            self._interpretation_cache[action] = self._interpretation.\
+                temporary_occurrences
+            predictors = self._interpretation.predictors_at_the_end()
             action_values[action] = Estimator.predict(predictors)
+            self._interpretation.clean_temporary()
         return action_values
 
     def _choose(self, action_values):
-        actions = action_values.keys()
-        logits = action_values.values()
-        probabilities = self._softmax(logits)
+        if self._current_external_tour > 50:
+            a = 5
+        if self._current_external_tour > 100:
+            a = 5
+        if self._current_external_tour > 1000:
+            a = 5
+        actions = list(action_values.keys())
+        values = list(action_values.values())
+        probabilities = self._softmax(values)
         action = actions[choice(range(len(action_values)), p=probabilities)]
         return action
 
@@ -290,8 +293,9 @@ class RLAgent:
         return [exponential / exponentials_sum for exponential in exponentials]
 
     def _prepare_after_act_internally(self, action):
-        self._interpretation = self._interpretation_cache[action]
-        self._interpretation_cache = {}
+        self._interpretation.internal_trajectory.actions.append(action)
+        self._interpretation.add(self._interpretation_cache[action])
+
         if action.external:
             self._external_actions_positions.append(
                 self._current_internal_tour
@@ -410,14 +414,6 @@ class RLAgent:
             internal_actions = list(internal_actions.values())
         return internal_actions
 
-    @staticmethod
-    def _compare_predictors(a, b):
-        if isinstance(a, BasePredictor):
-            a = a.importance()
-        if isinstance(b, BasePredictor):
-            b = b.importance()
-        return a > b
-
 
 class Action:
     def __init__(self, id_=None, execution=None, external=True):
@@ -426,6 +422,8 @@ class Action:
         self.external = external
 
     def execute(self, memory=None):
+        if not self.execution:
+            return None
         if self.external:  # better check if 'memory' parameter exists
             self.execution()
         else:
@@ -436,3 +434,9 @@ class Action:
 
     def __hash__(self):
         return hash(str(self))
+
+    def __str__(self):
+        return str(self.id)
+
+    def __repr__(self):
+        return str(self)

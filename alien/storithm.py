@@ -1,6 +1,6 @@
 from trajectory import StorithmOccurrence
 from helpers import AutoIncrementId
-from random import choice, randint, sample
+from random import uniform, randint, sample
 
 
 class Storithm:
@@ -202,6 +202,31 @@ class Procedure(Storithm):
             found_by
         )
 
+    def check_occurrence(self, interpretation, child_occurrence, position):
+        if position[1] == 0:
+            start = child_occurrence.end + 1
+            second_child = self.children[position[0]][1]
+            second_child_occurrence = interpretation.\
+                find_storithm_occurrence_starting_in(second_child, start)
+            if second_child_occurrence:
+                return StorithmOccurrence(
+                    self,
+                    child_occurrence.start,
+                    second_child_occurrence.end
+                )
+        if position[1] == 1:
+            end = child_occurrence.start - 1
+            second_child = self.children[position[0]][0]
+            second_child_occurrence = interpretation.\
+                find_storithm_occurrence_ending_in(second_child, end)
+            if second_child_occurrence:
+                return StorithmOccurrence(
+                    self,
+                    second_child_occurrence.start,
+                    child_occurrence.end
+                )
+        return None
+
     def connect_with_children(self):
         for i in self._unconnected_children:
             for j, child in enumerate(self._unconnected_children[i]):
@@ -227,33 +252,6 @@ class Procedure(Storithm):
         self._unconnected_children[len(self.children) - 1] = unpacked_children
         self.connected_with_children = False
 
-    def check_occurrence(self, interpretation, child_occurrence, position):
-        if position[1] == 0:
-            start = child_occurrence.end + 1
-            second_child = self.children[position[0]][1]
-            second_child_occurrence = interpretation.\
-                find_storithm_occurrence_starting_in(second_child, start)
-            if second_child_occurrence:
-                return StorithmOccurrence(
-                    self,
-                    child_occurrence.start,
-                    second_child_occurrence.end
-                )
-
-        if position[1] == 1:
-            end = child_occurrence.start - 1
-            second_child = self.children[position[0]][0]
-            second_child_occurrence = interpretation.\
-                find_storithm_occurrence_ending_in(second_child, end)
-            if second_child_occurrence:
-                return StorithmOccurrence(
-                    self,
-                    second_child_occurrence.start,
-                    child_occurrence.end
-                )
-
-        return None
-
     def __str__(self):
         first_child = self.children[0][0]
         second_child = self.children[0][1]
@@ -272,14 +270,115 @@ class Procedure(Storithm):
 
 
 class Condition(Storithm):
+    ADDING_PROBABILITY = 0.1
+
+    def __init__(self, children, predictors=None):
+        super().__init__(children, predictors)
+
+    @staticmethod
+    def create(interpretation, sample_position):
+        position = sample_position()
+        count = 1
+        while uniform(0, 1) > Condition.ADDING_PROBABILITY:
+            count += 1
+        occurrences = interpretation.sample_storithm_occurrences(
+            count,
+            {StateAtom},
+            position
+        )
+        if not occurrences:
+            return None
+        children = [occurrence.storithm for occurrence in occurrences]
+        return StorithmOccurrence(Condition(children), position, position)
+
+    def check_occurrence(self, interpretation, child_occurrence, position):
+        position_in_interpretation = child_occurrence.start
+        for key, child in enumerate(self.children):
+            if key == position:
+                continue
+            child_occurs = interpretation.find_storithm_occurrence(
+                child,
+                position_in_interpretation
+            )
+            if not child_occurs:
+                return None
+        return StorithmOccurrence(
+            self,
+            position_in_interpretation,
+            position_in_interpretation
+        )
+
+    def __eq__(self, other):
+        if self.id is None or other.id is None:
+            return (
+                self.__class__ == other.__class__ and
+                self.children == other.children
+            )
+        return self.id == other.id
+
+    def __hash__(self):
+        return 0
+
+
+class ConditionalStatement(Storithm):
+    POSITION_CONDITION = 0
+    POSITION_BODY = 1
+
     def __init__(self, condition_child, body_child, predictors=None):
         super().__init__([condition_child, body_child], predictors)
 
-    def create(self, interpretation, sample_position):
-        
+    @staticmethod
+    def create(interpretation, sample_position):
+        position = sample_position()
+        condition_child = interpretation.sample_storithm_occurrences(
+            1,
+            {Condition},
+            position
+        )
+        body_child = interpretation.sample_storithm_occurrences(
+            1,
+            {ActionAtom, ConditionalStatement, Loop, Procedure},
+            position
+        )
+        if not condition_child or not body_child:
+            return None
+        return StorithmOccurrence(
+            ConditionalStatement(condition_child, body_child),
+            position,
+            position
+        )
 
     def check_occurrence(self, interpretation, child_occurrence, position):
+        position_in_interpretation = child_occurrence.start
+        if position == self.POSITION_CONDITION:
+            child_occurs = interpretation.find_storithm_occurrence(
+                self._body_child(),
+                position_in_interpretation
+            )
+            if child_occurs:
+                return StorithmOccurrence(
+                    self,
+                    position_in_interpretation,
+                    position_in_interpretation
+                )
+        if position == self.POSITION_BODY:
+            child_occurs = interpretation.find_storithm_occurrence(
+                self._condition_child(),
+                position_in_interpretation
+            )
+            if child_occurs:
+                return StorithmOccurrence(
+                    self,
+                    position_in_interpretation,
+                    position_in_interpretation
+                )
         return None
+
+    def _condition_child(self):
+        return self.children[self.POSITION_CONDITION]
+
+    def _body_child(self):
+        return self.children[self.POSITION_BODY]
 
     def __eq__(self, other):
         if self.id is None or other.id is None:

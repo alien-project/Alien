@@ -148,3 +148,110 @@ def test_procedure_connect_with_children_disconnect_with_children():
     assert [] == atoms[2].parent_pointers
     assert [ParentPointer(procedure1, (0, 0))] == atoms[0].parent_pointers
     assert [] == procedure3.parent_pointers
+
+
+def test_condition_create():
+    trial_count = 5000
+    seed(500)
+
+    interpretation = Interpretation()
+    atoms = [
+        StateAtom(1, 1),
+        StateAtom(0, 1),
+        StateAtom(0, 0)
+    ]
+    interpretation.extend()
+    for atom in atoms:
+        interpretation.add_at_the_end(atom)
+
+    expected_proposal = StorithmOccurrence(Condition(atoms[1:3]), 1, 2)
+
+    proposed = False
+    for i in range(trial_count):
+        proposal = Condition.create(interpretation, lambda: 0)
+        if same(proposal, expected_proposal):
+            proposed = True
+            break
+    assert proposed
+
+
+def test_condition_check_occurrence():
+    interpretation = Interpretation()
+    atoms = [
+        StateAtom(1, 1),
+        StateAtom(0, 1),
+        StateAtom(0, 0)
+    ]
+    interpretation.extend()
+    for atom in atoms[0:2]:
+        interpretation.add_at_the_end(atom)
+    condition = Condition(atoms[1:3])
+    condition.connect_with_children()
+    child_occurrence = StorithmOccurrence(atoms[1], 0, 0)
+
+    occurrence = condition.check_occurrence(
+        interpretation,
+        child_occurrence,
+        (0, 1)
+    )
+    assert occurrence is None
+
+    interpretation.add_at_the_end(atoms[2])
+    occurrence = condition.check_occurrence(
+        interpretation,
+        child_occurrence,
+        (0, 1)
+    )
+    expected_occurrence = StorithmOccurrence(condition, 0, 0)
+    assert expected_occurrence == occurrence
+
+
+def test_conditional_statement_create():
+    trial_count = 5000
+    seed(500)
+
+    interpretation = Interpretation()
+    atoms = [
+        StateAtom(1, 1),
+        ActionAtom(Action(0))
+    ]
+    interpretation.extend()
+    for atom in atoms:
+        interpretation.add_at_the_end(atom)
+    condition = Condition([atoms[0]])
+    interpretation.add_at_the_end(condition)
+
+    conditional_statement = ConditionalStatement(condition, atoms[1])
+    expected_proposal = StorithmOccurrence(conditional_statement, 0, 0)
+
+    proposed = False
+    for i in range(trial_count):
+        proposal = ConditionalStatement.create(interpretation, lambda: 0)
+        if same(proposal, expected_proposal):
+            proposed = True
+            break
+    assert proposed
+
+
+def test_conditional_statement_check_occurrence():
+    interpretation = Interpretation()
+    atoms = [
+        StateAtom(1, 1),
+        ActionAtom(Action(0))
+    ]
+    interpretation.extend()
+    for atom in atoms:
+        interpretation.add_at_the_end(atom)
+    condition = Condition([atoms[0]])
+    interpretation.add_at_the_end(condition)
+
+    conditional_statement = ConditionalStatement(condition, atoms[1])
+    conditional_statement.connect_with_children()
+
+    occurrence = conditional_statement.check_occurrence(
+        interpretation,
+        StorithmOccurrence(condition, 0, 0),
+        ConditionalStatement.POSITION_CONDITION
+    )
+    expected_occurrence = StorithmOccurrence(conditional_statement, 0, 0)
+    assert expected_occurrence == occurrence

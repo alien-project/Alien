@@ -1,3 +1,6 @@
+from random import choice
+
+
 class LimitedSet:
     """Set with a limit of how many elements it can have.
 
@@ -8,7 +11,8 @@ class LimitedSet:
     This data structure is created with the purpose to be fast at
     adding an element, updating an element and removing the lowest
     element. It has time complexity O(log n) for all of these operations
-    thanks to using heap internally.
+    thanks to using heap (with dictionary / hash table to store
+    positions in the heap) internally.
     """
     def __init__(self, limit):
         self.limit = limit
@@ -97,6 +101,53 @@ class LimitedSet:
             ", Count: " +
             str(len(self))
         )
+
+
+class CustomSet:
+    """My own implementation of set.
+
+    This is needed because with default python implementation of set
+    you can't sample an element in the most efficient way possible.
+    """
+    def __init__(self):
+        self._dict = {}
+        self._list = []
+
+    def add(self, element):
+        if element not in self._dict:
+            self._list.append(element)
+            self._dict[element] = len(self._list) - 1
+
+    def remove(self, element):
+        if element in self._dict:
+            self._list[self._dict[element]] = None
+            self._dict.pop(element)
+
+    def sample(self, count):
+        if len(self) > count:
+            return None
+        selected = set()
+        result = []
+        for i in range(count):
+            a = choice(self._list)
+            while a in selected:
+                a = choice(self._list)
+            result.append(a)
+        return result
+
+    def clear(self):
+        """Makes sampling quicker.
+
+        If there are many elements added to the set and then removed,
+        sampling takes more time, so it's sometimes good to call this
+        method to clear None values if there were really lot of values
+        added to the set and then removed (this happens in Alien
+        algorithm if action space is big).
+        """
+        self._list = list(filter(lambda x: x is not None, self._list))
+
+    def __len__(self):
+        return len(self._dict)
 
 
 class AutoIncrementId:

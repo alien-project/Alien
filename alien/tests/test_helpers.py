@@ -90,3 +90,13 @@ def test_same():
     assert same(a, b)
 
     assert same([2, 3], [2, 3])
+
+
+def test_custom_set_sample():
+    custom_set = CustomSet()
+    custom_set.add(5)
+    custom_set.add(3)
+    for i in range(30):
+        a, b = custom_set.sample(2)
+        assert a == 5 or a == 3
+        assert b == 5 or b == 3

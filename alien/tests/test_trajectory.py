@@ -1,5 +1,5 @@
 from trajectory import *
-from storithm import StateAtom, ActionAtom, Procedure
+from storithm import StateAtom, ActionAtom, Procedure, Condition
 from prediction import Predictor
 from rl_agent import Action
 
@@ -67,8 +67,7 @@ def test_interpretation_add():
         interpretation.storithm_occurrences_ending
     )
 
-    expected_predictor_occurrences = {4: {predictor}}
-    assert expected_predictor_occurrences == interpretation.predictor_occurrences
+    assert {predictor} == interpretation.predictors_in(4)
 
     procedure2 = Procedure([[atoms[0], atoms[1]]], {1: predictor})
     occurrence = StorithmOccurrence(procedure2, 0, 1)
@@ -194,7 +193,17 @@ def test_interpretation_find_storithm_occurrence_ending_in():
     assert procedure_occurrence == occurrence
 
 
-def test_storithm_occurrence_hash():
-    atom = StateAtom(1, 0)
-    atom.id = 5
+def test_interpretation_sample_storithm_occurrences():
+    interpretation = Interpretation()
+    atoms = [StateAtom(1, 1), StateAtom(0, 1)]
+    condition = Condition(atoms)
+    interpretation.add(StorithmOccurrence(atoms[0], 0, 0))
+    interpretation.add(StorithmOccurrence(atoms[1], 0, 0))
+    interpretation.add(StorithmOccurrence(condition, 0, 0))
 
+    occurrences = interpretation.sample_storithm_occurrences(
+        2,
+        (StateAtom,),
+        0
+    )
+    assert set(atoms) == occurrences

@@ -1,7 +1,8 @@
 from trajectory import Interpretation
 from helpers import LimitedSet, AutoIncrementId
 from memory import Memory
-from storithm import Procedure, Atom, ActionAtom, StateAtom
+from storithm import ActionAtom, StateAtom, Condition, ConditionalStatement
+from storithm import Loop, Procedure
 from prediction import Estimator, Predictor
 from functools import partial
 from numpy import exp
@@ -45,7 +46,13 @@ class RLAgent:
             observation_shape,
             starting_points
         )
-        self._interpretation = Interpretation()
+        self._interpretation = Interpretation(
+            (
+                (StateAtom,),
+                (Condition,),
+                (ActionAtom, ConditionalStatement, Loop, Procedure)
+            )
+        )
         self._predictors = LimitedSet(max_predictors_count)
         self._rewards = []
         self._returns = []
@@ -62,6 +69,10 @@ class RLAgent:
         self._sample_weight = 1
         self._interpretation_cache = {}
         self._external_actions_positions = []
+        self._last_reward_multiplier = (
+            self._return_discount_factor **
+            self._horizon
+        )
 
     def act(self, observation, reward):
         self._prepare_before_learn(reward)
@@ -105,8 +116,14 @@ class RLAgent:
             self._rewards[-self._horizon - 2]
             if self._current_external_tour > self._horizon
             else 0
+        )  # it can work wrong at the beginning when this is 0
+        return_ = (
+            (
+                (previous_return - reward_before_horizon) *
+                self._return_discount_factor
+            ) +
+            reward * self._last_reward_multiplier
         )
-        return_ = previous_return + reward - reward_before_horizon
         self._returns.append(return_)
 
     def _learn(self):
@@ -275,12 +292,6 @@ class RLAgent:
         return action_values
 
     def _choose(self, action_values):
-        if self._current_external_tour > 50:
-            a = 5
-        if self._current_external_tour > 100:
-            a = 5
-        if self._current_external_tour > 1000:
-            a = 5
         actions = list(action_values.keys())
         values = list(action_values.values())
         probabilities = self._softmax(values)

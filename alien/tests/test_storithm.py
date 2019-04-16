@@ -6,11 +6,18 @@ from helpers import same
 from random import seed, choice
 
 
+type_groups = (
+    (StateAtom,),
+    (Condition,),
+    (ActionAtom, ConditionalStatement, Loop, Procedure)
+)
+
+
 def test_state_atom_create():
     trial_count = 5000
     seed(500)
 
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     interpretation.internal_trajectory.observations = [[0, 1], [1, 1]]
     interpretation.internal_trajectory.actions = [Action(0)]
 
@@ -25,14 +32,14 @@ def test_state_atom_create():
 
 
 def test_procedure_create():
-    trial_count = 5000
+    trial_count = 500
     seed(500)
 
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     atoms = [
-        StateAtom(1, 1),
-        StateAtom(0, 1),
-        ActionAtom(Action()),
+        ActionAtom(Action(0)),
+        ActionAtom(Action(1)),
+        ActionAtom(Action(2)),
         StateAtom(0, 0),
         StateAtom(0, 0)
     ]
@@ -44,16 +51,14 @@ def test_procedure_create():
 
     expected_children = [[atoms[0], procedure]]
     expected_storithm = Procedure(expected_children)
-    expected_found_by = [atoms[0], procedure]
     expected_proposal = StorithmOccurrence(
         expected_storithm,
         0,
-        2,
-        expected_found_by
+        2
     )
     proposed = False
     for i in range(trial_count):
-        proposal = Procedure.create(interpretation, lambda: choice([1, 2, 3]))
+        proposal = Procedure.create(interpretation, lambda: 1)
         if same(proposal, expected_proposal):
             proposed = True
             break
@@ -61,7 +66,7 @@ def test_procedure_create():
 
 
 def test_procedure_check_occurrence():
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     atoms = [
         StateAtom(1, 1),
         StateAtom(0, 1),
@@ -116,45 +121,45 @@ def test_procedure_connect_with_children_disconnect_with_children():
     atoms = [StateAtom(1, 1), StateAtom(0, 1), ActionAtom(Action(0))]
     procedure1 = Procedure([atoms[0:2]])
     procedure1.connect_with_children()
-    assert [ParentPointer(procedure1, (0, 0))] == atoms[0].parent_pointers
-    assert [ParentPointer(procedure1, (0, 1))] == atoms[1].parent_pointers
+    assert {ParentPointer(procedure1, (0, 0))} == atoms[0].parent_pointers
+    assert {ParentPointer(procedure1, (0, 1))} == atoms[1].parent_pointers
 
     procedure2 = Procedure([[procedure1, atoms[2]]])
     procedure2.connect_with_children()
-    assert [ParentPointer(procedure2, (0, 0))] == procedure1.parent_pointers
-    assert [ParentPointer(procedure2, (0, 1))] == atoms[2].parent_pointers
+    assert {ParentPointer(procedure2, (0, 0))} == procedure1.parent_pointers
+    assert {ParentPointer(procedure2, (0, 1))} == atoms[2].parent_pointers
 
     proposed_storithm = Procedure([[procedure1, atoms[2]]])
     procedure2.merge(proposed_storithm)
     procedure2.connect_with_children()
-    assert [ParentPointer(procedure2, (0, 0))] == procedure1.parent_pointers
-    assert [ParentPointer(procedure2, (0, 1))] == atoms[2].parent_pointers
+    assert {ParentPointer(procedure2, (0, 0))} == procedure1.parent_pointers
+    assert {ParentPointer(procedure2, (0, 1))} == atoms[2].parent_pointers
 
     procedure3 = Procedure([atoms[1:3]])
     proposed_storithm = Procedure([[atoms[0], procedure3]])
     procedure2.merge(proposed_storithm)
     procedure2.connect_with_children()
-    assert [ParentPointer(procedure2, (0, 0))] == procedure1.parent_pointers
-    assert [ParentPointer(procedure2, (0, 1))] == atoms[2].parent_pointers
-    expected_parent_pointers = [
+    assert {ParentPointer(procedure2, (0, 0))} == procedure1.parent_pointers
+    assert {ParentPointer(procedure2, (0, 1))} == atoms[2].parent_pointers
+    expected_parent_pointers = {
         ParentPointer(procedure1, (0, 0)),
         ParentPointer(procedure2, (1, 0))
-    ]
+    }
     assert expected_parent_pointers == atoms[0].parent_pointers
-    assert [ParentPointer(procedure2, (1, 1))] == procedure3.parent_pointers
+    assert {ParentPointer(procedure2, (1, 1))} == procedure3.parent_pointers
 
     procedure2.disconnect_with_children()
-    assert [] == procedure1.parent_pointers
-    assert [] == atoms[2].parent_pointers
-    assert [ParentPointer(procedure1, (0, 0))] == atoms[0].parent_pointers
-    assert [] == procedure3.parent_pointers
+    assert set() == procedure1.parent_pointers
+    assert set() == atoms[2].parent_pointers
+    assert {ParentPointer(procedure1, (0, 0))} == atoms[0].parent_pointers
+    assert set() == procedure3.parent_pointers
 
 
 def test_condition_create():
-    trial_count = 5000
+    trial_count = 500
     seed(500)
 
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     atoms = [
         StateAtom(1, 1),
         StateAtom(0, 1),
@@ -164,7 +169,7 @@ def test_condition_create():
     for atom in atoms:
         interpretation.add_at_the_end(atom)
 
-    expected_proposal = StorithmOccurrence(Condition(atoms[1:3]), 1, 2)
+    expected_proposal = StorithmOccurrence(Condition(atoms[1:3]), 0, 0)
 
     proposed = False
     for i in range(trial_count):
@@ -176,7 +181,7 @@ def test_condition_create():
 
 
 def test_condition_check_occurrence():
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     atoms = [
         StateAtom(1, 1),
         StateAtom(0, 1),
@@ -210,7 +215,7 @@ def test_conditional_statement_create():
     trial_count = 5000
     seed(500)
 
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     atoms = [
         StateAtom(1, 1),
         ActionAtom(Action(0))
@@ -234,7 +239,7 @@ def test_conditional_statement_create():
 
 
 def test_conditional_statement_check_occurrence():
-    interpretation = Interpretation()
+    interpretation = Interpretation(type_groups)
     atoms = [
         StateAtom(1, 1),
         ActionAtom(Action(0))
@@ -255,3 +260,32 @@ def test_conditional_statement_check_occurrence():
     )
     expected_occurrence = StorithmOccurrence(conditional_statement, 0, 0)
     assert expected_occurrence == occurrence
+
+
+def test_loop_create():
+    trial_count = 5000
+    seed(500)
+
+    atoms = [
+        StateAtom(1, 1),
+        ActionAtom(Action(0))
+    ]
+    condition = Condition([atoms[0]])
+    interpretation = Interpretation(type_groups)
+    for _ in range(5):
+        interpretation.extend()
+        interpretation.add_at_the_end(atoms[0])
+        interpretation.add_at_the_end(atoms[1])
+        interpretation.add_at_the_end(condition)
+
+    loop = Loop(condition, atoms[1])
+    expected_proposal = StorithmOccurrence(loop, 0, 4)
+    proposed = False
+    for i in range(trial_count):
+        proposal = Loop.create(interpretation, lambda: 0)
+        if same(proposal, expected_proposal):
+            proposed = True
+            break
+    assert proposed
+
+

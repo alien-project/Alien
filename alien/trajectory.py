@@ -39,10 +39,10 @@ class Interpretation:
             for _ in range(to_extend):
                 self.extend()
 
-        self._storithm_occurrences_starting[occurrence.start]\
-            [occurrence.storithm] = occurrence
-        self._storithm_occurrences_ending[occurrence.end]\
-            [occurrence.storithm] = occurrence
+        starting_cell = self._storithm_occurrences_starting[occurrence.start]
+        starting_cell[occurrence.storithm] = occurrence
+        ending_cell = self._storithm_occurrences_ending[occurrence.end]
+        ending_cell[occurrence.storithm] = occurrence
 
         for group in self.type_groups:
             storithm_in_group = self._is_storithm_in_group(
@@ -51,8 +51,14 @@ class Interpretation:
             )
             if not storithm_in_group:
                 continue
-            self._storithm_occurrences_starting_by_type[group].add(occurrence)
-            self._storithm_occurrences_ending_by_type[group].add(occurrence)
+            starting_cell = self._storithm_occurrences_starting_by_type[
+                occurrence.start
+            ]
+            starting_cell[group].add(occurrence)
+            ending_cell = self._storithm_occurrences_ending_by_type[
+                occurrence.end
+            ]
+            ending_cell[group].add(occurrence)
 
         if temporarily:
             self.temporary_occurrences.append(occurrence)
@@ -140,7 +146,10 @@ class Interpretation:
     ):
         return (
             self._storithm_occurrences_starting[starting_in][storithm]
-            if storithm in self._storithm_occurrences_starting[starting_in]
+            if (
+                starting_in < len(self) and
+                storithm in self._storithm_occurrences_starting[starting_in]
+            )
             else None
         )
 
@@ -151,7 +160,10 @@ class Interpretation:
     ):
         return (
             self._storithm_occurrences_ending[ending_in][storithm]
-            if storithm in self._storithm_occurrences_ending[ending_in]
+            if (
+                ending_in < len(self) and
+                storithm in self._storithm_occurrences_ending[ending_in]
+            )
             else None
         )
 
@@ -161,6 +173,8 @@ class Interpretation:
         type_group,
         count=1
     ):
+        if starting_in >= len(self):
+            return None
         starting_cell = self._storithm_occurrences_starting_by_type[starting_in]
         return starting_cell[type_group].sample(count)
 
@@ -170,6 +184,8 @@ class Interpretation:
         type_group,
         count=1
     ):
+        if ending_in >= len(self):
+            return None
         ending_cell = self._storithm_occurrences_ending_by_type[ending_in]
         return ending_cell[type_group].sample(count)
 
@@ -214,12 +230,11 @@ class InternalTrajectory:
 
 
 class StorithmOccurrence:
-    def __init__(self, storithm, start, end, found_by=None):
+    def __init__(self, storithm, start, end):
         self.storithm = storithm
         self.start = start
         self.end = end
         self._hash_cache = None
-        self.found_by = found_by or []
 
     def __eq__(self, other):
         return (
@@ -239,3 +254,12 @@ class StorithmOccurrence:
         )
         self._hash_cache = hash(prefix + storithm_part)
         return self._hash_cache
+
+    def __repr__(self):
+        return (
+            str(self.storithm) +
+            " start: " +
+            str(self.start) +
+            " end: " +
+            str(self.end)
+        )

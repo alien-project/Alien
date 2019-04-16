@@ -1,11 +1,11 @@
 from rl_agent import *
 from random import randint
 from memory import Memory
-from storithm import ActionAtom, StateAtom, Procedure
+from storithm import ActionAtom
 from numpy import array, array_equal
 
 
-def test_rl_agent_act():
+def test_rl_agent_act1():
     learning_trials_count = 1000  # 1000000000
     testing_trials_count = 10
 
@@ -33,22 +33,22 @@ def test_rl_agent_act():
         assert 1 == reward
 
 
-# def test_rl_agent_act():
-#     learning_trials_count = 1000000000
-#     testing_trials_count = 10
-#
-#     rl_agent = RLAgent((1,), [Action(0), Action(1)], 1, 0, 0.5, 2)
-#
-#     reward = 0
-#     for _ in range(learning_trials_count):
-#         observation = array([randint(0, 1)])
-#         action = rl_agent.act(observation, reward)
-#         reward = 1 if observation[0] == action.id else 0
-#     for _ in range(testing_trials_count):
-#         observation = array([randint(0, 1)])
-#         action = rl_agent.act(observation, reward)
-#         reward = 1 if observation[0] == action.id else 0
-#         assert 1 == reward
+def test_rl_agent_act2():
+    learning_trials_count = 1000000000
+    testing_trials_count = 10
+
+    rl_agent = RLAgent((1,), [Action(0), Action(1)], 1, 0, 0.5, 2)
+
+    reward = 0
+    for _ in range(learning_trials_count):
+        observation = array([randint(0, 1)])
+        action = rl_agent.act(observation, reward)
+        reward = 1 if observation[0] == action.id else 0
+    for _ in range(testing_trials_count):
+        observation = array([randint(0, 1)])
+        action = rl_agent.act(observation, reward)
+        reward = 1 if observation[0] == action.id else 0
+        assert 1 == reward
 
 
 def test_rl_agent_default_internal_actions_load_observation():

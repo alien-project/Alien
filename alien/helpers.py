@@ -123,16 +123,17 @@ class CustomSet:
             self._list[self._dict[element]] = None
             self._dict.pop(element)
 
-    def sample(self, count):
-        if len(self) > count:
+    def sample(self, count=1):
+        if len(self) == 0 or count > len(self):
             return None
         selected = set()
         result = []
         for i in range(count):
-            a = choice(self._list)
-            while a in selected:
-                a = choice(self._list)
-            result.append(a)
+            element = choice(self._list)
+            while element in selected:
+                element = choice(self._list)
+            selected.add(element)
+            result.append(element)
         return result
 
     def clear(self):
@@ -145,9 +146,16 @@ class CustomSet:
         algorithm if action space is big).
         """
         self._list = list(filter(lambda x: x is not None, self._list))
+        self._dict = {element: key for key, element in enumerate(self._list)}
 
     def __len__(self):
         return len(self._dict)
+
+    def __str__(self):
+        return str(set(self._list))
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class AutoIncrementId:

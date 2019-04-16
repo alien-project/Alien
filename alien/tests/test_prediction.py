@@ -1,47 +1,77 @@
 from alien.prediction import Predictor, Estimator
+from random import shuffle
 
 
-def test_estimator_fit():
-    predictors = [Predictor() for _ in range(3)]
-    for _ in range(4):
-        Estimator.fit([predictors[0]], 0)
-    for _ in range(2):
-        Estimator.fit(predictors[0:2], 4)
-    for _ in range(2):
-        Estimator.fit(predictors, 12)
-    assert 4 == predictors[0].mean
-    assert 24 == predictors[0].variance
-    assert 8 == predictors[0].confidence
-    assert 8 == predictors[1].mean
-    assert 16 == predictors[1].variance
-    assert 4 == predictors[1].confidence
-    assert 12 == predictors[2].mean
-    assert 0 == predictors[2].variance
-    assert 2 == predictors[2].confidence
+# def test_estimator_fit():
+#     predictors = [Predictor() for _ in range(3)]
+#     for _ in range(4):
+#         Estimator.fit([predictors[0]], 0)
+#     for _ in range(2):
+#         Estimator.fit(predictors[0:2], 4)
+#     for _ in range(2):
+#         Estimator.fit(predictors, 12)
+#     assert 4 == predictors[0].mean
+#     assert 24 == predictors[0].variance
+#     assert 8 == predictors[0].confidence
+#     assert 8 == predictors[1].mean
+#     assert 16 == predictors[1].variance
+#     assert 4 == predictors[1].confidence
+#     assert 12 == predictors[2].mean
+#     assert 0 == predictors[2].variance
+#     assert 2 == predictors[2].confidence
 
 
-def test_estimator_predict():
-    Estimator.a = 0.5
-    Estimator.b = 2
-    Estimator.mean_mad_ratio = 0.5
+def test_estimator_fit_predict():
+    # Estimator.a = 0.5
+    # Estimator.b = 2
+    # Estimator.mean_mad_ratio = 0.5
 
     predictors = [Predictor() for _ in range(5)]
-    for _ in range(10):
-        Estimator.fit(predictors, 12)
-    for _ in range(10):
-        Estimator.fit(predictors[1:5], 0)
-    for _ in range(10):
-        Estimator.fit(predictors[2:5], 0)
-    for _ in range(10):
-        Estimator.fit(predictors[3:5], 0)
-    for _ in range(10):
-        Estimator.fit([predictors[4]], 0)
-    for _ in range(10):
-        Estimator.fit(predictors[0:4], 12)
+    x = []
+
+    for _ in range(100):
+        x.append((predictors, 12))
+    for _ in range(100):
+        x.append((predictors[1:5], 0))
+    for _ in range(100):
+        x.append((predictors[2:5], 0))
+    for _ in range(100):
+        x.append((predictors[3:5], 0))
+    for _ in range(100):
+        x.append(([predictors[4]], 0))
+    for _ in range(100):
+        x.append((predictors[0:4], 12))
+    for _ in range(100):
+        x.append(([predictors[0]], 12))
+    for _ in range(100):
+        x.append(([predictors[4]], 0))
+
+    shuffle(x)
+
+    for a in x:
+        Estimator.fit(a[0], a[1])
+
+    # for _ in range(100):
+    #     Estimator.fit(predictors, 12)
+    # for _ in range(100):
+    #     Estimator.fit(predictors[1:5], 0)
+    # for _ in range(100):
+    #     Estimator.fit(predictors[2:5], 0)
+    # for _ in range(100):
+    #     Estimator.fit(predictors[3:5], 0)
+    # for _ in range(100):
+    #     Estimator.fit([predictors[4]], 0)
+    # for _ in range(100):
+    #     Estimator.fit(predictors[0:4], 12)
+    # for _ in range(100):
+    #     Estimator.fit([predictors[0]], 12)
+    # for _ in range(100):
+    #     Estimator.fit([predictors[4]], 0)
 
     assert Estimator.predict(predictors[2:5]) < 6
     assert Estimator.predict(predictors[0:3]) > 7
     assert Estimator.predict([predictors[4]]) < 4
+    assert Estimator.predict([predictors[0]]) > 8
 
 
 # def test_prediction_predict():
@@ -102,6 +132,6 @@ def test_estimator_predict():
 #         prediction.fit(true_value)
 
 
-def test_base_predictor_same():
-    assert Predictor(5, 4, 3, 2).same(Predictor(5, 4, 3, 1))
-    assert not Predictor(5, 3, 3, 2).same(Predictor(5, 4, 3, 1))
+# def test_base_predictor_same():
+#     assert Predictor(5, 4, 3, 2).same(Predictor(5, 4, 3, 1))
+#     assert not Predictor(5, 3, 3, 2).same(Predictor(5, 4, 3, 1))

@@ -1,6 +1,5 @@
 from helpers import AutoIncrementId
 from math import log
-from storithm import ActionAtom
 
 
 class BasePredictor:
@@ -54,82 +53,109 @@ class BaseEstimator:
         raise NotImplementedError
 
 
+# class Predictor(BasePredictor):
+#     def __init__(self, mean=0, variance=0, confidence=0, id_=None):
+#         self.mean = mean
+#         self.variance = variance
+#         self.confidence = confidence
+#         self.sum = self.variance * self.confidence
+#         super().__init__(id_)
+#
+#     def variance_value(self):
+#         if self.confidence == 0:
+#             return Estimator.MEAN_VARIANCE_RATIO
+#         variance_confidence = min(
+#             (
+#                 Estimator.VARIANCE_CONFIDENCE_MULTIPLIER *
+#                 log(
+#                     self.confidence,
+#                     Estimator.VARIANCE_CONFIDENCE_BASE
+#                 )
+#             ),
+#             Estimator.ALMOST_ONE
+#         )
+#         return (
+#             (
+#                 variance_confidence *
+#                 self.variance /
+#                 max(self.mean ** 2, Estimator.ALMOST_ONE)
+#             ) +
+#             (
+#                 (1 - variance_confidence) *
+#                 Estimator.MEAN_VARIANCE_RATIO
+#             )
+#         )
+#
+#     def importance(self):
+#         return 0
+#
+#     # def confidence(self):
+#     #     return self.confidence_
+#
+#
+# class Estimator(BaseEstimator):
+#     VARIANCE_CONFIDENCE_MULTIPLIER = 0.5
+#     VARIANCE_CONFIDENCE_BASE = 2
+#     MEAN_VARIANCE_RATIO = 0.9
+#     ALMOST_ZERO = 0.01
+#     ALMOST_ONE = 0.99
+#
+#     @staticmethod
+#     def fit(predictors, value, sample_weight=1):
+#         for predictor in predictors:
+#             old_mean = predictor.mean
+#             predictor.mean = (
+#                 (
+#                     predictor.mean * predictor.confidence +
+#                     value * sample_weight
+#                 ) /
+#                 (predictor.confidence + sample_weight)
+#             )
+#             predictor.confidence += sample_weight
+#             predictor.sum += (
+#                 (value - old_mean) *
+#                 (value - predictor.mean) *
+#                 sample_weight
+#             )
+#             predictor.variance = predictor.sum / predictor.confidence
+#
+#     @staticmethod
+#     def predict(predictors):
+#         top = 0
+#         bottom = 0
+#         for predictor in predictors:
+#             top += (
+#                 predictor.mean * predictor.confidence /
+#                 predictor.variance_value()
+#             )
+#             bottom += predictor.confidence / predictor.variance_value()
+#         return top / bottom if bottom > 0 else 0
+
+
 class Predictor(BasePredictor):
-    def __init__(self, mean=0, variance=0, confidence=0, id_=None):
-        self.mean = mean
-        self.variance = variance
-        self.confidence = confidence
-        self.sum = self.variance * self.confidence
+    def __init__(self, coefficient=0, id_=None):
+        self.coefficient = coefficient
         super().__init__(id_)
 
-    def variance_value(self):
-        if self.confidence == 0:
-            return Estimator.MEAN_VARIANCE_RATIO
-        variance_confidence = min(
-            (
-                Estimator.VARIANCE_CONFIDENCE_MULTIPLIER *
-                log(self.confidence, Estimator.VARIANCE_CONFIDENCE_BASE)
-            ),
-            Estimator.ALMOST_ONE
-        )
-        return (
-            (
-                variance_confidence *
-                self.variance /
-                max(self.mean ** 2, Estimator.ALMOST_ONE)
-            ) +
-            (1 - variance_confidence) * Estimator.MEAN_VARIANCE_RATIO
-        )
-
     def importance(self):
-        return 0
-
-    # def confidence(self):
-    #     return self.confidence_
+        return self.coefficient
 
 
 class Estimator(BaseEstimator):
-    VARIANCE_CONFIDENCE_MULTIPLIER = 0.5
-    VARIANCE_CONFIDENCE_BASE = 2
-    MEAN_VARIANCE_RATIO = 0.9
-    ALMOST_ZERO = 0.01
-    ALMOST_ONE = 0.99
+    LEARNING_RATE = 0.05
+    bias = 0
 
     @staticmethod
     def fit(predictors, value, sample_weight=1):
+        prediction = Estimator.predict(predictors)
+        error = prediction - value
+        Estimator.bias -= Estimator.LEARNING_RATE * error
         for predictor in predictors:
-            if (
-                isinstance(predictor.storithm, ActionAtom) and
-                predictor.storithm.action.id == 0 and
-                predictor.distance == 0 and
-                value == 1
-            ):
-                a = 5
-
-            old_mean = predictor.mean
-            predictor.mean = (
-                (
-                    predictor.mean * predictor.confidence +
-                    value * sample_weight
-                ) /
-                (predictor.confidence + sample_weight)
-            )
-            predictor.confidence += sample_weight
-            predictor.sum += (
-                (value - old_mean) *
-                (value - predictor.mean) *
-                sample_weight
-            )
-            predictor.variance = predictor.sum / predictor.confidence
+            predictor.coefficient -= Estimator.LEARNING_RATE * error
 
     @staticmethod
     def predict(predictors):
-        top = 0
-        bottom = 0
-        for predictor in predictors:
-            top += (
-                predictor.mean * predictor.confidence /
-                predictor.variance_value()
-            )
-            bottom += predictor.confidence / predictor.variance_value()
-        return top / bottom if bottom > 0 else 0
+        return (
+            sum([predictor.coefficient for predictor in predictors]) +
+            Estimator.bias
+        )

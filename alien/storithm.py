@@ -1,12 +1,12 @@
 from trajectory import StorithmOccurrence
 from helpers import AutoIncrementId
-from random import uniform, randint, sample
+from random import uniform, randint
 
 
 class Storithm:
     def __init__(self, children, predictors=None):
         self.children = children
-        self.parent_pointers = []
+        self.parent_pointers = set()
         self.predictors = predictors or {}
         self.connected_with_children = False
         self.id = None
@@ -20,7 +20,7 @@ class Storithm:
         self.id = AutoIncrementId.generate()
 
     def add_parent(self, parent, position):
-        self.parent_pointers.append(ParentPointer(parent, position))
+        self.parent_pointers.add(ParentPointer(parent, position))
 
     def remove_parent(self, parent, position):
         self.parent_pointers.remove(ParentPointer(parent, position))
@@ -68,7 +68,8 @@ class Storithm:
         return str(self)
 
     def __str__(self):
-        return str(self.children[0]).join(" ").join(str(self.children[1]))
+        children_str = [str(child) for child in self.children]
+        return " ".join(children_str)
 
     def __eq__(self, other):
         raise NotImplementedError
@@ -96,6 +97,9 @@ class ParentPointer:
             self.__class__ == other.__class__ and
             self.__dict__ == other.__dict__
         )
+
+    def __hash__(self):
+        return hash((self.parent, self.position))
 
 
 class Atom(Storithm):
@@ -180,26 +184,20 @@ class Procedure(Storithm):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        joint_cells = [
-            interpretation.storithm_occurrences_ending[position - 1],
-            interpretation.storithm_occurrences_starting[position]
-        ]
-        if not joint_cells[0] or not joint_cells[1]:
+        type_group = (ActionAtom, ConditionalStatement, Loop, Procedure)
+        first_child_occurrence, = interpretation.\
+            sample_storithm_occurrences_ending_in(position - 1, type_group)
+        second_child_occurrence, = interpretation.\
+            sample_storithm_occurrences_starting_in(position, type_group)
+        if not first_child_occurrence or not second_child_occurrence:
             return None
-        first_child_occurrence, = sample(joint_cells[0], 1)
-        second_child_occurrence, = sample(joint_cells[1], 1)
         children = [
             [first_child_occurrence.storithm, second_child_occurrence.storithm]
-        ]
-        found_by = [
-            first_child_occurrence.storithm,
-            second_child_occurrence.storithm
         ]
         return StorithmOccurrence(
             Procedure(children),
             first_child_occurrence.start,
-            second_child_occurrence.end,
-            found_by
+            second_child_occurrence.end
         )
 
     def check_occurrence(self, interpretation, child_occurrence, position):
@@ -243,8 +241,6 @@ class Procedure(Storithm):
     
     def merge(self, proposed_storithm):  # test
         super().merge(proposed_storithm)
-        # optimization to do: use binary search for children,
-        # sorted by storithm id (change it to SortedSet and it's ok)
         unpacked_children = proposed_storithm.children[0]
         if unpacked_children in self.children:
             return None
@@ -270,21 +266,22 @@ class Procedure(Storithm):
 
 
 class Condition(Storithm):
-    ADDING_PROBABILITY = 0.1
+    ADDING_PROBABILITY = 0.3
 
     def __init__(self, children, predictors=None):
+        children.sort(key=hash)
         super().__init__(children, predictors)
 
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
         count = 1
-        while uniform(0, 1) > Condition.ADDING_PROBABILITY:
+        while uniform(0, 1) < Condition.ADDING_PROBABILITY:
             count += 1
-        occurrences = interpretation.sample_storithm_occurrences(
-            count,
-            {StateAtom},
-            position
+        occurrences = interpretation.sample_storithm_occurrences_ending_in(
+            position,
+            (StateAtom,),
+            count
         )
         if not occurrences:
             return None
@@ -296,7 +293,7 @@ class Condition(Storithm):
         for key, child in enumerate(self.children):
             if key == position:
                 continue
-            child_occurs = interpretation.find_storithm_occurrence(
+            child_occurs = interpretation.find_storithm_occurrence_ending_in(
                 child,
                 position_in_interpretation
             )
@@ -317,7 +314,7 @@ class Condition(Storithm):
         return self.id == other.id
 
     def __hash__(self):
-        return 0
+        return super().__hash__()
 
 
 class ConditionalStatement(Storithm):
@@ -330,18 +327,20 @@ class ConditionalStatement(Storithm):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        condition_child = interpretation.sample_storithm_occurrences(
-            1,
-            {Condition},
-            position
-        )
-        body_child = interpretation.sample_storithm_occurrences(
-            1,
-            {ActionAtom, ConditionalStatement, Loop, Procedure},
-            position
-        )
-        if not condition_child or not body_child:
+        condition_occurrence, = interpretation.\
+            sample_storithm_occurrences_ending_in(
+                position,
+                (Condition,)
+            )
+        body_occurrence, = interpretation.\
+            sample_storithm_occurrences_ending_in(
+                position,
+                (ActionAtom, ConditionalStatement, Loop, Procedure)
+            )
+        if not condition_occurrence or not body_occurrence:
             return None
+        condition_child = condition_occurrence.storithm
+        body_child = body_occurrence.storithm
         return StorithmOccurrence(
             ConditionalStatement(condition_child, body_child),
             position,
@@ -351,7 +350,7 @@ class ConditionalStatement(Storithm):
     def check_occurrence(self, interpretation, child_occurrence, position):
         position_in_interpretation = child_occurrence.start
         if position == self.POSITION_CONDITION:
-            child_occurs = interpretation.find_storithm_occurrence(
+            child_occurs = interpretation.find_storithm_occurrence_ending_in(
                 self._body_child(),
                 position_in_interpretation
             )
@@ -362,7 +361,7 @@ class ConditionalStatement(Storithm):
                     position_in_interpretation
                 )
         if position == self.POSITION_BODY:
-            child_occurs = interpretation.find_storithm_occurrence(
+            child_occurs = interpretation.find_storithm_occurrence_ending_in(
                 self._condition_child(),
                 position_in_interpretation
             )
@@ -395,6 +394,57 @@ class ConditionalStatement(Storithm):
 class Loop(Storithm):
     def __init__(self, condition_child, body_child, predictors=None):
         super().__init__([condition_child, body_child], predictors)
+
+    @staticmethod
+    def create(interpretation, sample_position):
+        position = sample_position()
+        first_condition_occurrence, = interpretation.\
+            sample_storithm_occurrences_starting_in(position, (Condition,))
+        first_body_occurrence, = interpretation.\
+            sample_storithm_occurrences_starting_in(
+                position, (ActionAtom, ConditionalStatement, Loop, Procedure)
+            )
+        if not first_condition_occurrence or not first_body_occurrence:
+            return None
+
+        condition_child = first_condition_occurrence.storithm
+        body_child = first_body_occurrence.storithm
+
+        i = 0
+        condition_occurrence = first_condition_occurrence
+        body_occurrence = first_body_occurrence
+        loop_end = position
+        while condition_occurrence:
+            if not body_occurrence:
+                return None
+            start = body_occurrence.end + 1
+            loop_end = body_occurrence.end
+            condition_occurrence = interpretation.\
+                find_storithm_occurrence_starting_in(condition_child, start)
+            body_occurrence = interpretation.\
+                find_storithm_occurrence_starting_in(body_child, start)
+            i += 1
+
+        condition_occurrence = first_condition_occurrence
+        body_occurrence = first_body_occurrence
+        loop_start = position
+        while condition_occurrence and body_occurrence:
+            end = body_occurrence.start - 1
+            loop_start = body_occurrence.start
+            body_occurrence = interpretation.\
+                find_storithm_occurrence_ending_in(body_child, end)
+            condition_occurrence = interpretation.\
+                find_storithm_occurrence_starting_in(
+                    condition_child,
+                    body_occurrence.start
+                )
+            i += 1
+
+        if i == 2:
+            return None
+
+        loop = Loop(condition_child, body_child)
+        return StorithmOccurrence(loop, loop_start, loop_end)
 
     def check_occurrence(self, interpretation, child_occurrence, position):
         return None

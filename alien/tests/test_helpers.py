@@ -98,5 +98,6 @@ def test_custom_set_sample():
     custom_set.add(3)
     for i in range(30):
         a, b = custom_set.sample(2)
-        assert a == 5 or a == 3
-        assert b == 5 or b == 3
+        assert a in {5, 3}
+        assert b in {5, 3}
+        assert a != b

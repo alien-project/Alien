@@ -143,8 +143,8 @@ class RLAgent:
 
         self._timer.start("create")
         return_ = self._returns[-1]
-        max_new_predictors_count = self._max_new_predictors_count(return_)
-        new_predictors_count = 0
+        # max_new_predictors_count = self._max_new_predictors_count(return_)
+        # new_predictors_count = 0
 
         storithm_type = self._storithm_type_to_create(True)
         while storithm_type:
@@ -167,9 +167,9 @@ class RLAgent:
 
             self._interpretation.add(occurrence)
 
-            new_predictors_count += 1
-            if new_predictors_count == max_new_predictors_count:
-                break
+            # new_predictors_count += 1
+            # if new_predictors_count == max_new_predictors_count:
+            #     break
 
             storithm_type = self._storithm_type_to_create()
         self._timer.stop()
@@ -217,14 +217,14 @@ class RLAgent:
         return storithm_type
 
     def _sample_position(self):
-        distance = self._horizon + choice([0, 0, 0, 1, 1, 2, 2])  # hardcoded
+        distance = self._horizon + choice([0])  # hardcoded
         position = len(self._interpretation) - distance - 1
         while position < 0:
-            distance = self._horizon + choice([0, 0, 0, 1, 1, 2, 2])
+            distance = self._horizon + choice([0])
             position = len(self._interpretation) - distance - 1
         return position
 
-    def _importance_for_return(self, return_):
+    def _importance_for_return(self, return_):  # wrong!
         predictor = Predictor()
         Estimator.fit([predictor], return_, self._sample_weight, False)
         return predictor.importance()

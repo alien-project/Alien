@@ -38,7 +38,7 @@ def test_rl_agent_act1():
 
 
 def test_rl_agent_act2():
-    learning_trials_count = 1000  # 1000000000
+    learning_trials_count = 1000
     testing_trials_count = 10
 
     seed(500)

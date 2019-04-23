@@ -282,10 +282,12 @@ def test_loop_create():
     expected_proposal = StorithmOccurrence(loop, 0, 4)
     proposed = False
     for i in range(trial_count):
-        proposal = Loop.create(interpretation, lambda: 0)
+        proposal = Loop.create(interpretation, lambda: 1)
         if same(proposal, expected_proposal):
             proposed = True
             break
     assert proposed
 
 
+def test_loop_check_occurrence():
+    pass

@@ -1,15 +1,16 @@
 from rl_agent import *
-from random import randint
+from random import randint, seed
 from memory import Memory
 from storithm import ActionAtom
 from numpy import array, array_equal
 
 
 def test_rl_agent_act1():
-    learning_trials_count = 1000  # 1000000000
+    learning_trials_count = 1000
     testing_trials_count = 10
 
-    create_storithm_types = [{ActionAtom: 2}]
+    seed(500)
+
     rl_agent = RLAgent(
         (1,),
         [Action(0), Action(1)],
@@ -18,7 +19,10 @@ def test_rl_agent_act1():
         0.5,
         0,
         time_importance_factor=1,
-        create_storithm_types=create_storithm_types
+        create_storithm_types=[{ActionAtom: 2}],
+        max_predictors_count=30,
+        softmax_multiplier=10,
+        internal_actions=[]
     )
 
     reward = 0
@@ -34,10 +38,30 @@ def test_rl_agent_act1():
 
 
 def test_rl_agent_act2():
-    learning_trials_count = 1000000000
+    learning_trials_count = 1000  # 1000000000
     testing_trials_count = 10
 
-    rl_agent = RLAgent((1,), [Action(0), Action(1)], 1, 0, 0.5, 2)
+    seed(500)
+
+    create_storithm_types = [
+        {ActionAtom: 2, StateAtom: 2},
+        {Condition: 2},
+        {ConditionalStatement: 4}
+    ]
+    rl_agent = RLAgent(
+        (1,),
+        [Action(0), Action(1)],
+        1,
+        0,
+        0.5,
+        0,
+        time_importance_factor=1,
+        create_storithm_types=create_storithm_types,
+        max_predictors_count=30,
+        softmax_multiplier=15,
+        internal_actions=[],
+        memory_tapes_count=0
+    )
 
     reward = 0
     for _ in range(learning_trials_count):

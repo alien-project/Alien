@@ -138,7 +138,7 @@ class Predictor(BasePredictor):
         super().__init__(id_)
 
     def importance(self):
-        return self.coefficient
+        return abs(self.coefficient)
 
 
 class Estimator(BaseEstimator):
@@ -146,10 +146,11 @@ class Estimator(BaseEstimator):
     bias = 0
 
     @staticmethod
-    def fit(predictors, value, sample_weight=1):
+    def fit(predictors, value, sample_weight=1, change_bias=True):
         prediction = Estimator.predict(predictors)
         error = prediction - value
-        Estimator.bias -= Estimator.LEARNING_RATE * error
+        if change_bias:
+            Estimator.bias -= Estimator.LEARNING_RATE * error
         for predictor in predictors:
             predictor.coefficient -= Estimator.LEARNING_RATE * error
 

@@ -1,8 +1,8 @@
 from trajectory import Interpretation
-from helpers import LimitedSet, AutoIncrementId
+from helpers import LimitedSet, AutoIncrementId, Timer
 from memory import Memory
 from storithm import ActionAtom, StateAtom, Condition, ConditionalStatement
-from storithm import Loop, Procedure
+from storithm import Atom, Loop, Procedure
 from prediction import Estimator, Predictor
 from functools import partial
 from numpy import exp
@@ -27,6 +27,7 @@ class RLAgent:
         memory_tapes_length=5000,
         internal_actions=None,
         starting_points=None,
+        softmax_multiplier=1
     ):
         self._observation_shape = observation_shape
         self._external_actions = external_actions
@@ -50,6 +51,7 @@ class RLAgent:
             (
                 (StateAtom,),
                 (Condition,),
+                (ActionAtom, Loop, Procedure),
                 (ActionAtom, ConditionalStatement, Loop, Procedure)
             )
         )
@@ -73,6 +75,8 @@ class RLAgent:
             self._return_discount_factor **
             self._horizon
         )
+        self._softmax_multiplier = softmax_multiplier
+        self._timer = Timer()
 
     def act(self, observation, reward):
         self._prepare_before_learn(reward)
@@ -109,6 +113,7 @@ class RLAgent:
         )
 
     def _prepare_before_learn(self, reward):
+        self._timer.start("prepare_before_learn")
         self._rewards.append(reward)
 
         previous_return = self._returns[-1] if self._returns else 0
@@ -125,6 +130,7 @@ class RLAgent:
             reward * self._last_reward_multiplier
         )
         self._returns.append(return_)
+        self._timer.stop()
 
     def _learn(self):
         self._create()
@@ -135,6 +141,7 @@ class RLAgent:
         if self._current_external_tour <= self._horizon:
             return None
 
+        self._timer.start("create")
         return_ = self._returns[-1]
         max_new_predictors_count = self._max_new_predictors_count(return_)
         new_predictors_count = 0
@@ -165,6 +172,7 @@ class RLAgent:
                 break
 
             storithm_type = self._storithm_type_to_create()
+        self._timer.stop()
 
     def _add_predictor_to_storithm(self, occurrence):
         margin_cell = len(self._interpretation) - self._horizon - 1
@@ -210,16 +218,21 @@ class RLAgent:
 
     def _sample_position(self):
         distance = self._horizon + choice([0, 0, 0, 1, 1, 2, 2])  # hardcoded
-        return len(self._interpretation) - distance - 1
+        position = len(self._interpretation) - distance - 1
+        while position < 0:
+            distance = self._horizon + choice([0, 0, 0, 1, 1, 2, 2])
+            position = len(self._interpretation) - distance - 1
+        return position
 
     def _importance_for_return(self, return_):
         predictor = Predictor()
-        Estimator.fit([predictor], return_, self._sample_weight)
+        Estimator.fit([predictor], return_, self._sample_weight, False)
         return predictor.importance()
 
     def _fit(self):
         if self._current_external_tour <= self._horizon + 1:
             return None
+        self._timer.start("fit")
         start = self._external_actions_positions[-self._horizon - 2] + 1
         end = self._external_actions_positions[-self._horizon - 1]
         return_ = self._returns[-1]
@@ -227,10 +240,15 @@ class RLAgent:
             predictors = self._interpretation.predictors_in(tour)
             Estimator.fit(predictors, return_, self._sample_weight)
             self._update(predictors)
+        self._timer.stop()
 
     def _update(self, predictors):
         for predictor in predictors:
-            removed_predictor = self._predictors.update(predictor)
+            removed_predictor = None
+            if predictor in self._predictors:
+                self._predictors.update(predictor)
+            else:
+                removed_predictor = self._predictors.add(predictor)
             if removed_predictor:
                 storithm = removed_predictor.storithm
                 storithm.predictors.pop(removed_predictor.distance, None)
@@ -243,23 +261,17 @@ class RLAgent:
         if isinstance(storithm, Atom):
             self._atoms.pop(storithm)
 
-        # prediction_occurrences = self._prediction_occurrences[
-        #     self._current_tour - self._horizon
-        # ]
-        # for prediction_occurrence in prediction_occurrences:
-        #     storithm = prediction_occurrence.storithm_occurrence.storithm
-        #     storithm.update_predictions_importance()
-        #     predictor = prediction_occurrence.predictor
-        #     self._sorted_predictors.update_position(predictor)
-
     def _merge(self):
         pass
 
     def _prepare_after_learn(self, observation):
+        self._timer.start("prepare_after_learn")
         self._memory.external_observation = observation
         self._sample_weight *= self.time_importance_factor
+        self._timer.stop()
 
     def _prepare_before_act_internally(self):
+        self._timer.start("_prepare_before_act_internally")
         internal_observation = self._memory.internal_observation()
         self._interpretation.internal_trajectory.observations.append(
             internal_observation
@@ -269,11 +281,18 @@ class RLAgent:
             if isinstance(atom, StateAtom):
                 if internal_observation[atom.state_id] == atom.value:
                     self._interpretation.add_at_the_end(atom)
+        self._timer.stop()
 
     def _act_internally(self):
+        self._timer.start("predict")
         action_values = self._predict()
+        self._timer.stop()
+        self._timer.start("choose")
         action = self._choose(action_values)
+        self._timer.stop()
+        self._timer.start("action_execute")
         action.execute(None if action.external else self._memory)
+        self._timer.stop()
         return action
 
     def _predict(self):
@@ -288,10 +307,13 @@ class RLAgent:
                 temporary_occurrences
             predictors = self._interpretation.predictors_at_the_end()
             action_values[action] = Estimator.predict(predictors)
-            self._interpretation.clean_temporary()
+            self._interpretation.clear_temporary()
         return action_values
 
     def _choose(self, action_values):
+        if self._current_external_tour > 50:
+            a = 5
+
         actions = list(action_values.keys())
         values = list(action_values.values())
         probabilities = self._softmax(values)
@@ -299,11 +321,14 @@ class RLAgent:
         return action
 
     def _softmax(self, logits):
-        exponentials = [exp(logit) for logit in logits]
+        logits = [logit * self._softmax_multiplier for logit in logits]
+        max_ = max(logits)
+        exponentials = [exp(logit - max_) for logit in logits]
         exponentials_sum = sum(exponentials)
         return [exponential / exponentials_sum for exponential in exponentials]
 
     def _prepare_after_act_internally(self, action):
+        self._timer.start("prepare_after_act_internally")
         self._interpretation.internal_trajectory.actions.append(action)
         self._interpretation.add(self._interpretation_cache[action])
 
@@ -313,6 +338,7 @@ class RLAgent:
             )
             self._current_external_tour += 1
         self._current_internal_tour += 1
+        self._timer.stop()
 
     @staticmethod
     def _load_observation_actions():
@@ -415,7 +441,7 @@ class RLAgent:
         If internal actions are none, then take the standard internal
         actions. If the value is a dict, convert it to a list.
         """
-        if not internal_actions:
+        if internal_actions is None:
             internal_actions = RLAgent.default_internal_actions(
                 len(observation_shape),
                 2,

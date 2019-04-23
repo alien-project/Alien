@@ -50,6 +50,11 @@ class Memory:
     def go_to_point(self, point):
         self.external_observation_tape.go_to_point(point)
 
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        if key == 'external_observation':
+            self.load_observation()
+
 
 class Tape:
     def __init__(self, shape, pointer):

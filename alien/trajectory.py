@@ -76,16 +76,19 @@ class Interpretation:
     def add_temporarily(self, occurrence):
         self.add(occurrence, True)
 
-    def clean_temporary(self):
+    def clear_temporary(self):
         for temporary_occurrence in self.temporary_occurrences:
             starting_cell = self._storithm_occurrences_starting[
                 temporary_occurrence.start
             ]
-            starting_cell.pop(temporary_occurrence.storithm)
+            if temporary_occurrence.storithm in starting_cell:
+                starting_cell.pop(temporary_occurrence.storithm)
             ending_cell = self._storithm_occurrences_ending[
                 temporary_occurrence.end
             ]
-            ending_cell.pop(temporary_occurrence.storithm)
+            if temporary_occurrence.storithm in ending_cell:
+                ending_cell.pop(temporary_occurrence.storithm)
+            # the bug happens quite quickly so you can debug to this place
             for group in self.type_groups:
                 storithm_in_group = self._is_storithm_in_group(
                     temporary_occurrence.storithm,
@@ -93,17 +96,22 @@ class Interpretation:
                 )
                 if not storithm_in_group:
                     continue
-                self._storithm_occurrences_starting_by_type\
-                    [temporary_occurrence.start][group].remove(
-                        temporary_occurrence
-                    )
-                self._storithm_occurrences_ending_by_type\
-                    [temporary_occurrence.end][group].remove(
+                starting_cell = self._storithm_occurrences_starting_by_type\
+                    [temporary_occurrence.start]
+                if temporary_occurrence in starting_cell[group]:
+                    starting_cell[group].remove(
+                            temporary_occurrence
+                        )
+                ending_cell = self._storithm_occurrences_ending_by_type\
+                    [temporary_occurrence.end]
+                if temporary_occurrence in ending_cell[group]:
+                    ending_cell[group].remove(
                         temporary_occurrence
                     )
 
         for pointer in self._temporary_predictor_pointers:
-            self._predictor_occurrences[pointer[0]].remove(pointer[1])
+            if pointer[1] in self._predictor_occurrences[pointer[0]]:
+                self._predictor_occurrences[pointer[0]].remove(pointer[1])
 
         self.temporary_occurrences = []
         self._temporary_predictor_pointers = []
@@ -147,7 +155,7 @@ class Interpretation:
         return (
             self._storithm_occurrences_starting[starting_in][storithm]
             if (
-                starting_in < len(self) and
+                0 <= starting_in < len(self) and
                 storithm in self._storithm_occurrences_starting[starting_in]
             )
             else None
@@ -161,7 +169,7 @@ class Interpretation:
         return (
             self._storithm_occurrences_ending[ending_in][storithm]
             if (
-                ending_in < len(self) and
+                0 <= ending_in < len(self) and
                 storithm in self._storithm_occurrences_ending[ending_in]
             )
             else None
@@ -171,7 +179,7 @@ class Interpretation:
         self,
         starting_in,
         type_group,
-        count=1
+        count
     ):
         if starting_in >= len(self):
             return None
@@ -182,26 +190,40 @@ class Interpretation:
         self,
         ending_in,
         type_group,
-        count=1
+        count
     ):
+        if len(self) > len(self._storithm_occurrences_ending_by_type):
+            a = 0
+        if ending_in < 0:
+            a = 0
         if ending_in >= len(self):
             return None
         ending_cell = self._storithm_occurrences_ending_by_type[ending_in]
         return ending_cell[type_group].sample(count)
 
-    # def find_storithm_occurrence_starting_in(self, storithm, position):
-    #     occurrences = self.storithm_occurrences_starting[position]
-    #     for occurrence in occurrences:
-    #         if occurrence.storithm == storithm:
-    #             return occurrence
-    #     return None
-    #
-    # def find_storithm_occurrence_ending_in(self, storithm, position):
-    #     occurrences = self.storithm_occurrences_ending[position]
-    #     for occurrence in occurrences:
-    #         if occurrence.storithm == storithm:
-    #             return occurrence
-    #     return None
+    def sample_storithm_occurrence_starting_in(
+        self,
+        starting_in,
+        type_group
+    ):
+        occurrences = self.sample_storithm_occurrences_starting_in(
+            starting_in,
+            type_group,
+            1
+        )
+        return occurrences[0] if occurrences else None
+
+    def sample_storithm_occurrence_ending_in(
+        self,
+        ending_in,
+        type_group
+    ):
+        occurrences = self.sample_storithm_occurrences_ending_in(
+            ending_in,
+            type_group,
+            1
+        )
+        return occurrences[0] if occurrences else None
 
     def predictors_in(self, position):
         return (
@@ -244,7 +266,7 @@ class StorithmOccurrence:
             self.end == other.end
         )
 
-    def __hash__(self):  # remove cache
+    def __hash__(self):  # is it needed at all
         if self._hash_cache:
             return self._hash_cache
         prefix = str(self.start) + str(self.end)

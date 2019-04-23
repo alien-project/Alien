@@ -29,6 +29,7 @@ class Storithm:
         for key in proposed_storithm.predictors:
             if key not in self.predictors:
                 self.predictors[key] = proposed_storithm.predictors[key]
+                self.predictors[key].storithm = self
 
     def connect_with_children(self):
         for key, child in enumerate(self.children):
@@ -127,7 +128,14 @@ class ActionAtom(Atom):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        action = interpretation.internal_trajectory.actions[position]
+        if len(interpretation.internal_trajectory.actions) <= position:
+            a = 5
+        if position < 0:
+            a = 5
+        try:
+            action = interpretation.internal_trajectory.actions[position]
+        except IndexError:
+            a = 5
         return StorithmOccurrence(ActionAtom(action), position, position)
 
     def __str__(self):
@@ -154,9 +162,14 @@ class StateAtom(Atom):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        observation = interpretation.internal_trajectory.observations[position]
+        try:
+            observation = interpretation.internal_trajectory.observations[
+                position
+            ]
+        except IndexError:
+            a = 5
         state_id = randint(0, len(observation) - 1)
-        value = observation[state_id]
+        value = int(observation[state_id])
         atom = StateAtom(state_id, value)
         return StorithmOccurrence(atom, position, position)
 
@@ -185,10 +198,10 @@ class Procedure(Storithm):
     def create(interpretation, sample_position):
         position = sample_position()
         type_group = (ActionAtom, ConditionalStatement, Loop, Procedure)
-        first_child_occurrence, = interpretation.\
-            sample_storithm_occurrences_ending_in(position - 1, type_group)
-        second_child_occurrence, = interpretation.\
-            sample_storithm_occurrences_starting_in(position, type_group)
+        first_child_occurrence = interpretation.\
+            sample_storithm_occurrence_ending_in(position - 1, type_group)
+        second_child_occurrence = interpretation.\
+            sample_storithm_occurrence_starting_in(position, type_group)
         if not first_child_occurrence or not second_child_occurrence:
             return None
         children = [
@@ -269,7 +282,7 @@ class Condition(Storithm):
     ADDING_PROBABILITY = 0.3
 
     def __init__(self, children, predictors=None):
-        children.sort(key=hash)
+        children.sort(key=lambda x: (x.state_id, x.value))
         super().__init__(children, predictors)
 
     @staticmethod
@@ -282,7 +295,10 @@ class Condition(Storithm):
             position,
             (StateAtom,),
             count
-        )
+        )  # bug: there are storithms that have two the same state atoms,
+        #  why doesn't it sample without replacement?
+        #  because it sample storithm occurrence, not storithm!!
+        #  although it's on the same position so it should be equal
         if not occurrences:
             return None
         children = [occurrence.storithm for occurrence in occurrences]
@@ -327,15 +343,15 @@ class ConditionalStatement(Storithm):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        condition_occurrence, = interpretation.\
-            sample_storithm_occurrences_ending_in(
+        condition_occurrence = interpretation.\
+            sample_storithm_occurrence_ending_in(
                 position,
                 (Condition,)
             )
-        body_occurrence, = interpretation.\
-            sample_storithm_occurrences_ending_in(
+        body_occurrence = interpretation.\
+            sample_storithm_occurrence_ending_in(
                 position,
-                (ActionAtom, ConditionalStatement, Loop, Procedure)
+                (ActionAtom, Loop, Procedure)
             )
         if not condition_occurrence or not body_occurrence:
             return None
@@ -398,10 +414,10 @@ class Loop(Storithm):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        first_condition_occurrence, = interpretation.\
-            sample_storithm_occurrences_starting_in(position, (Condition,))
-        first_body_occurrence, = interpretation.\
-            sample_storithm_occurrences_starting_in(
+        first_condition_occurrence = interpretation.\
+            sample_storithm_occurrence_starting_in(position, (Condition,))
+        first_body_occurrence = interpretation.\
+            sample_storithm_occurrence_starting_in(
                 position, (ActionAtom, ConditionalStatement, Loop, Procedure)
             )
         if not first_condition_occurrence or not first_body_occurrence:
@@ -415,6 +431,7 @@ class Loop(Storithm):
         body_occurrence = first_body_occurrence
         loop_end = position
         while condition_occurrence:
+            i += 1
             if not body_occurrence:
                 return None
             start = body_occurrence.end + 1
@@ -423,22 +440,23 @@ class Loop(Storithm):
                 find_storithm_occurrence_starting_in(condition_child, start)
             body_occurrence = interpretation.\
                 find_storithm_occurrence_starting_in(body_child, start)
-            i += 1
 
         condition_occurrence = first_condition_occurrence
         body_occurrence = first_body_occurrence
         loop_start = position
         while condition_occurrence and body_occurrence:
+            i += 1
             end = body_occurrence.start - 1
             loop_start = body_occurrence.start
             body_occurrence = interpretation.\
                 find_storithm_occurrence_ending_in(body_child, end)
+            if not body_occurrence:
+                break
             condition_occurrence = interpretation.\
                 find_storithm_occurrence_starting_in(
                     condition_child,
                     body_occurrence.start
                 )
-            i += 1
 
         if i == 2:
             return None

@@ -43,7 +43,7 @@ def test_interpretation():
         interpretation.temporary_occurrences
     )
 
-    interpretation.clean_temporary()
+    interpretation.clear_temporary()
 
     assert [] == interpretation.temporary_occurrences
 
@@ -51,7 +51,7 @@ def test_interpretation():
     assert result is None
 
     interpretation.add([occurrence])
-    interpretation.clean_temporary()
+    interpretation.clear_temporary()
 
     result = interpretation.find_storithm_occurrence_starting_in(procedure2, 0)
     assert occurrence == result
@@ -76,13 +76,13 @@ def test_interpretation_interpret():
     result = interpretation.find_storithm_occurrence_starting_in(procedure, 1)
     assert occurrence == result
 
-    interpretation.clean_temporary()
+    interpretation.clear_temporary()
 
     result = interpretation.find_storithm_occurrence_starting_in(procedure, 1)
     assert result is None
 
     interpretation.interpret()
-    interpretation.clean_temporary()
+    interpretation.clear_temporary()
 
     occurrence = StorithmOccurrence(procedure, 1, 2)
     result = interpretation.find_storithm_occurrence_starting_in(procedure, 1)

@@ -1,4 +1,5 @@
 from random import choice
+from time import time
 
 
 class LimitedSet:
@@ -10,9 +11,9 @@ class LimitedSet:
 
     This data structure is created with the purpose to be fast at
     adding an element, updating an element and removing the lowest
-    element. It has time complexity O(log n) for all of these operations
-    thanks to using heap (with dictionary / hash table to store
-    positions in the heap) internally.
+    element. It has worst case time complexity O(log n) for all of
+    these operations thanks to using heap (with dictionary / hash
+    table to store positions in the heap) internally.
     """
     def __init__(self, limit):
         self.limit = limit
@@ -38,6 +39,8 @@ class LimitedSet:
         return None
 
     def pop(self):
+        if len(self) == 0:
+            return None
         returned = self._heap[0]
         self._swap(0, len(self._heap) - 1)
         self._positions.pop(self._heap[-1])
@@ -86,8 +89,8 @@ class LimitedSet:
         self._positions[self._heap[j]] = i
         self._heap[i], self._heap[j] = self._heap[j], self._heap[i]
 
-    def __contains__(self, item):
-        return item in self._positions
+    def __contains__(self, element):
+        return element in self._positions
 
     def __len__(self):
         return len(self._heap)
@@ -107,7 +110,8 @@ class CustomSet:
     """My own implementation of set.
 
     This is needed because with default python implementation of set
-    you can't sample an element in the most efficient way possible.
+    you can't sample an element in the most efficient way possible
+    (random.sample() converts set to a tuple).
     """
     def __init__(self):
         self._dict = {}
@@ -119,12 +123,14 @@ class CustomSet:
             self._dict[element] = len(self._list) - 1
 
     def remove(self, element):
-        if element in self._dict:
+        try:
             self._list[self._dict[element]] = None
             self._dict.pop(element)
+        except KeyError:
+            raise KeyError("Trying to remove an element that is not in set.")
 
     def sample(self, count=1):
-        if len(self) == 0 or count > len(self):
+        if count > len(self):
             return None
         selected = set()
         result = []
@@ -136,17 +142,21 @@ class CustomSet:
             result.append(element)
         return result
 
-    def clear(self):
+    def clean_up(self):
         """Makes sampling quicker.
 
         If there are many elements added to the set and then removed,
         sampling takes more time, so it's sometimes good to call this
         method to clear None values if there were really lot of values
         added to the set and then removed (this happens in Alien
-        algorithm if action space is big).
+        algorithm if action space is big because there are many
+        elements added temporarily and then removed).
         """
         self._list = list(filter(lambda x: x is not None, self._list))
         self._dict = {element: key for key, element in enumerate(self._list)}
+
+    def __contains__(self, element):
+        return element in self._dict
 
     def __len__(self):
         return len(self._dict)
@@ -173,6 +183,25 @@ class AutoIncrementId:
         return id_
 
 
+class Timer:
+    def __init__(self):
+        self.times = {}
+        self.active = None
+        self.start_time = None
+
+    def start(self, name):
+        self.active = name
+        self.start_time = time()
+
+    def stop(self):
+        time_ = time() - self.start_time
+        self.times[self.active] = (
+            self.times[self.active] + time_ if self.active in self.times
+            else time_
+        )
+        self.active = None
+
+
 def same(a, b):
     if a.__class__ != b.__class__:
         return False
@@ -194,6 +223,8 @@ def same(a, b):
     if isinstance(a, list) or isinstance(a, tuple) or isinstance(a, set):
         if len(a) != len(b):
             return False
+        if isinstance(a, set):
+            a = list(a)
         for key, value in enumerate(a):
             if not same(a[key], b[key]):
                 return False

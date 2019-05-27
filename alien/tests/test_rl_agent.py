@@ -21,8 +21,9 @@ def test_rl_agent_act1():
         time_importance_factor=1,
         create_storithm_types=[{ActionAtom: 2}],
         max_predictors_count=30,
-        softmax_multiplier=10,
-        internal_actions=[]
+        softmax_temperature=10,
+        internal_actions=[],
+        memory_tapes_count=0
     )
 
     reward = 0
@@ -58,7 +59,7 @@ def test_rl_agent_act2():
         time_importance_factor=1,
         create_storithm_types=create_storithm_types,
         max_predictors_count=30,
-        softmax_multiplier=15,
+        softmax_temperature=15,
         internal_actions=[],
         memory_tapes_count=0
     )

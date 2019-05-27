@@ -132,6 +132,6 @@ def test_estimator_fit_predict():
 #         prediction.fit(true_value)
 
 
-# def test_base_predictor_same():
-#     assert Predictor(5, 4, 3, 2).same(Predictor(5, 4, 3, 1))
-#     assert not Predictor(5, 3, 3, 2).same(Predictor(5, 4, 3, 1))
+def test_base_predictor_same():
+    assert Predictor(5).same(Predictor(5))
+    assert not Predictor(4).same(Predictor(5))

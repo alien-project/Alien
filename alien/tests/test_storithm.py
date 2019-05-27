@@ -9,6 +9,7 @@ from random import seed, choice
 type_groups = (
     (StateAtom,),
     (Condition,),
+    (ActionAtom, Loop, Procedure),
     (ActionAtom, ConditionalStatement, Loop, Procedure)
 )
 
@@ -100,12 +101,20 @@ def test_procedure_merge():
     proposed_storithm = Procedure([atoms[0:2]], {2: Predictor()})
     procedure1.merge(proposed_storithm)
     assert [atoms[0:2]] == procedure1.children
-    assert same({2: Predictor(), 3: Predictor()}, procedure1.predictors)
+    expected_predictors = {
+        2: Predictor(storithm=procedure1, distance=2),
+        3: Predictor(storithm=procedure1, distance=3)
+    }
+    assert same(expected_predictors, procedure1.predictors)
 
     proposed_storithm = Procedure([atoms[0:2]], {4: Predictor()})
     procedure1.merge(proposed_storithm)
     assert [atoms[0:2]] == procedure1.children
-    expected_predictors = {2: Predictor(), 3: Predictor(), 4: Predictor()}
+    expected_predictors = {
+        2: Predictor(storithm=procedure1, distance=2),
+        3: Predictor(storithm=procedure1, distance=3),
+        4: Predictor(storithm=procedure1, distance=4)
+    }
     assert same(expected_predictors, procedure1.predictors)
 
     procedure2 = Procedure([[procedure1, atoms[2]]], {2: Predictor()})
@@ -114,7 +123,11 @@ def test_procedure_merge():
     procedure2.merge(proposed_storithm)
     expected_children = [[procedure1, atoms[2]], [atoms[0], procedure3]]
     assert expected_children == procedure2.children
-    assert same({2: Predictor(), 3: Predictor()}, procedure2.predictors)
+    expected_predictors = {
+        2: Predictor(storithm=procedure2, distance=2),
+        3: Predictor(storithm=procedure2, distance=3)
+    }
+    assert same(expected_predictors, procedure2.predictors)
 
 
 def test_procedure_connect_with_children_disconnect_with_children():

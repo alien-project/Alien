@@ -7,7 +7,7 @@ class Storithm:
     def __init__(self, children, predictors=None):
         self.children = children
         self.parent_pointers = set()
-        self.predictors = predictors or {}
+        self.predictors = self._prepare_predictors(predictors)
         self.connected_with_children = False
         self.id = None
         self._hash_cache = None
@@ -64,6 +64,14 @@ class Storithm:
     #
     #     self.importance = self.predictors_importance +
     # self.parents_importance
+
+    def _prepare_predictors(self, predictors):
+        if not predictors:
+            return {}
+        for key in predictors:
+            predictors[key].storithm = self
+            predictors[key].distance = key
+        return predictors
 
     def __repr__(self):
         return str(self)
@@ -154,8 +162,8 @@ class ActionAtom(Atom):
 
 
 class StateAtom(Atom):
-    def __init__(self, state_id, value, predictors=None):
-        self.state_id = state_id
+    def __init__(self, tape_id, value, predictors=None):
+        self.tape_id = tape_id
         self.value = value
         super().__init__(predictors)
 
@@ -168,19 +176,19 @@ class StateAtom(Atom):
             ]
         except IndexError:
             a = 5
-        state_id = randint(0, len(observation) - 1)
-        value = int(observation[state_id])
-        atom = StateAtom(state_id, value)
+        tape_id = randint(0, len(observation) - 1)
+        value = int(observation[tape_id])
+        atom = StateAtom(tape_id, value)
         return StorithmOccurrence(atom, position, position)
 
     def __str__(self):
-        return "s_" + str(self.state_id) + "_" + str(int(self.value))
+        return "s_" + str(self.tape_id) + "_" + str(int(self.value))
 
     def __eq__(self, other):
         if self.id is None or other.id is None:
             return (
                 self.__class__ == other.__class__ and
-                self.state_id == other.state_id and
+                self.tape_id == other.tape_id and
                 self.value == other.value
             )
         return self.id == other.id
@@ -282,7 +290,7 @@ class Condition(Storithm):
     ADDING_PROBABILITY = 0.3
 
     def __init__(self, children, predictors=None):
-        children.sort(key=lambda x: (x.state_id, x.value))
+        children.sort(key=lambda x: (x.tape_id, x.value))
         super().__init__(children, predictors)
 
     @staticmethod
@@ -297,8 +305,11 @@ class Condition(Storithm):
             count
         )  # bug: there are storithms that have two the same state atoms,
         #  why doesn't it sample without replacement?
-        #  because it sample storithm occurrence, not storithm!!
+        #  because it samples storithm occurrence, not storithm!!
         #  although it's on the same position so it should be equal
+        #  probably something wrong with storithm ids, it calculates
+        #  hash based on storithm id, if storithm ids are different
+        #  then hash is different
         if not occurrences:
             return None
         children = [occurrence.storithm for occurrence in occurrences]
@@ -349,7 +360,7 @@ class ConditionalStatement(Storithm):
                 (Condition,)
             )
         body_occurrence = interpretation.\
-            sample_storithm_occurrence_ending_in(
+            sample_storithm_occurrence_starting_in(
                 position,
                 (ActionAtom, Loop, Procedure)
             )
@@ -360,32 +371,34 @@ class ConditionalStatement(Storithm):
         return StorithmOccurrence(
             ConditionalStatement(condition_child, body_child),
             position,
-            position
+            body_occurrence.end
         )
 
     def check_occurrence(self, interpretation, child_occurrence, position):
         position_in_interpretation = child_occurrence.start
         if position == self.POSITION_CONDITION:
-            child_occurs = interpretation.find_storithm_occurrence_ending_in(
-                self._body_child(),
-                position_in_interpretation
-            )
-            if child_occurs:
-                return StorithmOccurrence(
-                    self,
-                    position_in_interpretation,
+            body_occurrence = interpretation.\
+                find_storithm_occurrence_starting_in(
+                    self._body_child(),
                     position_in_interpretation
                 )
-        if position == self.POSITION_BODY:
-            child_occurs = interpretation.find_storithm_occurrence_ending_in(
-                self._condition_child(),
-                position_in_interpretation
-            )
-            if child_occurs:
+            if body_occurrence:
                 return StorithmOccurrence(
                     self,
                     position_in_interpretation,
+                    body_occurrence.end
+                )
+        if position == self.POSITION_BODY:
+            condition_occurrence = interpretation.\
+                find_storithm_occurrence_ending_in(
+                    self._condition_child(),
                     position_in_interpretation
+                )
+            if condition_occurrence:
+                return StorithmOccurrence(
+                    self,
+                    position_in_interpretation,
+                    child_occurrence.end
                 )
         return None
 
@@ -415,7 +428,7 @@ class Loop(Storithm):
     def create(interpretation, sample_position):
         position = sample_position()
         first_condition_occurrence = interpretation.\
-            sample_storithm_occurrence_starting_in(position, (Condition,))
+            sample_storithm_occurrence_ending_in(position, (Condition,))
         first_body_occurrence = interpretation.\
             sample_storithm_occurrence_starting_in(
                 position, (ActionAtom, ConditionalStatement, Loop, Procedure)
@@ -465,7 +478,7 @@ class Loop(Storithm):
         return StorithmOccurrence(loop, loop_start, loop_end)
 
     def check_occurrence(self, interpretation, child_occurrence, position):
-        return None
+        return None  # to do (will return two occurrences)
 
     def __eq__(self, other):
         if self.id is None or other.id is None:

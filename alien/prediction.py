@@ -1,11 +1,10 @@
 from helpers import AutoIncrementId
-from math import log
 
 
 class BasePredictor:
-    def __init__(self, id_=None):
-        self.storithm = None
-        self.distance = None
+    def __init__(self, id_=None, storithm=None, distance=None):
+        self.storithm = storithm
+        self.distance = distance
         self.id = AutoIncrementId.generate(id_)
         self._hash_cache = None
 
@@ -133,9 +132,9 @@ class BaseEstimator:
 
 
 class Predictor(BasePredictor):
-    def __init__(self, coefficient=0, id_=None):
+    def __init__(self, coefficient=0, id_=None, storithm=None, distance=None):
         self.coefficient = coefficient
-        super().__init__(id_)
+        super().__init__(id_, storithm, distance)
 
     def importance(self):
         return abs(self.coefficient)

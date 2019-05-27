@@ -27,7 +27,7 @@ class RLAgent:
         memory_tapes_length=5000,
         internal_actions=None,
         starting_points=None,
-        softmax_multiplier=1
+        softmax_temperature=1
     ):
         self._observation_shape = observation_shape
         self._external_actions = external_actions
@@ -75,7 +75,7 @@ class RLAgent:
             self._return_discount_factor **
             self._horizon
         )
-        self._softmax_multiplier = softmax_multiplier
+        self._softmax_temperature = softmax_temperature
         self._timer = Timer()
 
     def act(self, observation, reward):
@@ -121,7 +121,7 @@ class RLAgent:
             self._rewards[-self._horizon - 2]
             if self._current_external_tour > self._horizon
             else 0
-        )  # it can work wrong at the beginning when this is 0
+        )
         return_ = (
             (
                 (previous_return - reward_before_horizon) *
@@ -142,17 +142,18 @@ class RLAgent:
             return None
 
         self._timer.start("create")
-        return_ = self._returns[-1]
+        # return_ = self._returns[-1]
         # max_new_predictors_count = self._max_new_predictors_count(return_)
         # new_predictors_count = 0
 
-        storithm_type = self._storithm_type_to_create(True)
+        storithm_type = self._storithm_type_to_create(first_in_tour=True)
         while storithm_type:
             occurrence = storithm_type.create(
                 self._interpretation,
                 self._sample_position
             )
             if not occurrence:
+                storithm_type = self._storithm_type_to_create()
                 continue
 
             self._add_predictor_to_storithm(occurrence)
@@ -175,6 +176,7 @@ class RLAgent:
         self._timer.stop()
 
     def _add_predictor_to_storithm(self, occurrence):
+        # bug: it should be horizon of external tours, now it's internal
         margin_cell = len(self._interpretation) - self._horizon - 1
         distance = margin_cell - occurrence.end
 
@@ -256,10 +258,11 @@ class RLAgent:
                     self._remove_storithm(storithm)
 
     def _remove_storithm(self, storithm):
-        self._storithms.pop(storithm)
-        storithm.disconnect_with_children()
-        if isinstance(storithm, Atom):
-            self._atoms.pop(storithm)
+        if storithm in self._storithms:
+            self._storithms.pop(storithm)
+            storithm.disconnect_with_children()
+            if isinstance(storithm, Atom):
+                self._atoms.pop(storithm)
 
     def _merge(self):
         pass
@@ -279,7 +282,7 @@ class RLAgent:
         self._interpretation.extend()  # this should be done by itself
         for atom in self._atoms:
             if isinstance(atom, StateAtom):
-                if internal_observation[atom.state_id] == atom.value:
+                if internal_observation[atom.tape_id] == atom.value:
                     self._interpretation.add_at_the_end(atom)
         self._timer.stop()
 
@@ -311,9 +314,6 @@ class RLAgent:
         return action_values
 
     def _choose(self, action_values):
-        if self._current_external_tour > 50:
-            a = 5
-
         actions = list(action_values.keys())
         values = list(action_values.values())
         probabilities = self._softmax(values)
@@ -321,7 +321,7 @@ class RLAgent:
         return action
 
     def _softmax(self, logits):
-        logits = [logit * self._softmax_multiplier for logit in logits]
+        logits = [logit * self._softmax_temperature for logit in logits]
         max_ = max(logits)
         exponentials = [exp(logit - max_) for logit in logits]
         exponentials_sum = sum(exponentials)

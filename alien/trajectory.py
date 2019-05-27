@@ -88,7 +88,6 @@ class Interpretation:
             ]
             if temporary_occurrence.storithm in ending_cell:
                 ending_cell.pop(temporary_occurrence.storithm)
-            # the bug happens quite quickly so you can debug to this place
             for group in self.type_groups:
                 storithm_in_group = self._is_storithm_in_group(
                     temporary_occurrence.storithm,
@@ -194,7 +193,7 @@ class Interpretation:
     ):
         if len(self) > len(self._storithm_occurrences_ending_by_type):
             a = 0
-        if ending_in < 0:
+        if ending_in < 0:  # it can happen in procedure that it samples from -1 and it's ok
             a = 0
         if ending_in >= len(self):
             return None

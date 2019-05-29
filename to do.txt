@@ -1,0 +1,62 @@
+Copy operation:
+1. Correct create (it takes a lot of time):
+a) create StorithmRepository class and change self._storithms to StorithmRepository instance. add_storithm, remove_storithm and methods like that should be all in StorithmRepository class. Storithm should have StorithmRepository reference and if two storithms have the same storithm id in storithm repository then they are equal. See if it solves some bugs below.
+b) add caching to creating storithms in StorithmRepository (key - children, value - if storithm exists) so that you don't have to calculate storithms.]
+c) correct children in procedure to be a set of tuples (so that you don't have to iterate through all storithms when checking if a tuple of children exists in it)
+d) add storithm importance,
+e) fix importance_for_return so that you don't create storithms that will be removed later anyway.
+
+1. Improved Alien without the things below.
+2. Children should be a set.
+2. Target return <- multiply logits by number based on target return and number of actions (so that the probability of choosing the best action if expected reward == target reward is 0.99).
+2. Ensure that storithms are possible to pickle because string hash is different every time you run a program.
+2. Change iterating through all parent_pointers to choosing random parents (or importance).
+3. Storithm importance
+4. Correct go_to_point so that you can go to point [0, None, None] and you have that starting points on default
+5. Loops.
+6. Merging.
+7. Location tapes (tapes indicating position of the pointer in the input).
+8. Flushing (in case it won't work without this, then flushing before merging).
+9. Observation - more than one sense (more than one observation tape).
+11. Clean up.
+14. Cache for checking if storithm exists when creating a new storithm.
+15. Make it customizable.
+
+Bugs:
+a) Removing storithm sometimes throws key error when there is no if. If you set breakpoint after if removed_predictor, then the first predictor which will have both empty storithm.parent_pointers and storithm.predictors doesn't exist in self._storithms which indicates that the storithm hasn't been added to self._storithms at all despite existence of the predictor that has this storithm.
+b) seed in tests for some reason doesn't work, the algorithm doesn't always give the same results.
+c) There are two conditions with one children: s_0_0 (state atom). They are identical but must have been inequal, probably due to different id.
+d) There is a condition that has two the same stateAtoms as children (as if it sampled with replacement) <- probably something with storithms ids is fucked up.
+e) importance_for_return is wrong (it should take into account all predictors in the tour)
+f) this line: margin_cell = len(self._interpretation) - self._horizon - 1, self._horizon should be converted to the number of internal tours, it should be something like instead of self._horizon: self.current_internal_tour - self._external_actions_positions[-self._horizon]
+
+Frozenlake operation:
+2. Sample position.
+5. When creating a storithm and checking if it already exists, use cache (for these children, this one already exists or something like that...)
+
+To finish stage 1:
+1. (done) Interpretation needs to have good time complexity (at least if actions space is not too big).
+2. Children should be a tuple, in case of procedures it should be a set of tuples (the pointer should be a tuple of tuple and integer indicating position).
+3. (done) When checking importance for return, don't change the bias.
+4. Condition, ConditionalStatement, Loop - create, check_occurrence, __hash__, __eq__.
+5. Rethink what starting points it should have.
+6. find_storithm_occurrence always returns the same storithm occurrence. This can result in some storithms never being created. The storithm occurrences can be different in 'end' value. It's better if you sample one instead of returning first. This must be a list: self._storithm_occurrences_ending[ending_in][storithm] and then you need to sample one element from that.
+7. Multiple observations.
+8. StateAtom might be relative.
+9. When removing a storithm, you need to iterate through all its children and see if they still have some parents or predictors, otherwise they are useless and you should remove them (or update their importance).
+10. Ensure everything works.
+
+To finish stage 2:
+1. Importance.
+
+Actions:
+1. Load observation. -> load_observation
+2. Actions for switching the value. -> switch_value_observation, switch_value_memory_[tape_nr]
+3. Actions for moving the pointer. -> decrement_pointer_observation/memory_[dimension/tape_nr], increment_pointer_observation/memory_[dimension/tape_nr]
+4. Actions for moving to the starting point. -> move_to_starting_point_observation_[starting_point_nr], move_to_starting_point_memory_[starting_point_nr]
+5. Actions for creating new tapes and passing parameters (getting back to the previous tape) (later).
+
+If it's too slow, then 1. make sure that join() in str acts in expected way, 2. try to change hash function and make sure that hash function is good enough.
+
+Simple OpenAI gym environments:
+CartPole-v0, InvertedPendulum-v0, FrozenLake-v0, and HalfCheetah-v2 (with a short time horizon—only 100 or 250 steps instead of the full 1000)

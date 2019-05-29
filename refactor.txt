@@ -1,0 +1,65 @@
+-1. (done) test_procedure_propose_new always passes, regardless of distance because comparing storithms doesn't depend on predictors - fix that.
+
+0. (seems to be done) create() shouldn't base on reward, it should base on return
+
+1. Procedure stores two-dimensional list of children. children[0] is the same thing as children[1] and children[2] when downgrading to atoms:
+a) (done) refactor propose_new()
+b) (done) refactor create()
+c) (done) refactor check_occurrence()
+
+2. (done) Atoms - currently you can't have a predictor for an atom. It should have propose_new method as well. There should be self._atoms and all atoms from that list should be added to interpretation at the beginning.
+
+3. Before checking if storithms exists in create(), check if it occurs at this place in interpretation because if it exists, then 1. you don't need to add new predictor, 2. you shouldn't add this to interpretation. -> change beginning and ending to sorted set later, storithm_occurrences seems to be not needed.
+
+2. starting_in_cells and ending_in_cells should be a sorted set so that you can log n when searching.
+
+3. Deepcopy might fuck up storithm ids.
+
+4. Maybe self._storithms hash shouldn't be a storithm hash but children hash (but then you need to create a new class Children with its hash method). Then you can normally compare storithms and code looks more readable. Maybe create a new class StorithmInformation (or maybe better have one class storithm, but then there should be always only one instance of Storithm for the same storithm). And maybe create a new class PredictorInformation (with storithm, distance and actual predictor).
+
+5. Interpretation.storithm_occurrences should be a set, not a list (it's not used by the way, the only thing that is used is starting_in and ending_in). Trajectory module should be called Interpretation.
+
+6. External actions (and internal actions) ideally should be a set (or at least can be a set and maybe default_actions should return set instead of dict).
+
+7. Children in procedure and parent_pointers could be a set too (sorted set later) :).
+
+8. Change Memory name to InternalState.
+
+9. (done) How propose_new and create should work:
+a) the parameters of propose_new() are interpretation and sample_distance function.
+b) propose_new() returns StorithmOccurrence without predictor. Predictor is added in _create() method.
+c) propose_new() should be named create().
+
+10. Think of if all public properties in classes can be modified in an unwanted way (for example in Interpretation).
+
+11. _sample_distance should be based on self.impact_discount_factor
+
+12. Internal/external observation <- sometimes I assumed that it's numpy and sometimes that it's list <- sort it.
+
+13. Consider moving self._storithms to Storithm._storithms (and the same with atoms, and the same with _add_storithm, _remove_storithm (you can have class StorithmRepository)).
+
+14. Remove self._interpretation.extend() and change starting, beginning into dictionaries (of SortedSets) instead of lists.
+
+15. Two children together should be a tuple, not a list.
+
+16. Have state atoms and actions atoms in separate arrays and then remove isInstance(..., StateAtom)
+
+17. In Storithm hash is defined, but eq isn't - solve that hash weirdness. Predictor has some weirdness too when it comes to hashes...
+
+18. sample() converts set to tuples so it has linear time complexity, the only solution to this seems to be store a set and list and use a list for sampling element.
+
+19. find_storithm_occurrence_starting(or ending)_in has linear complexity, but it could have logarithmic.
+
+20. Internal trajectory should be outside of interpretation.
+
+21. Type groups should be a constant in every storithm and should be taken from there.
+
+22. Conition needs to have hash() defined so that condition consisting of the same stateAtoms but in different order returns the same hash.
+
+23. In interpret(), there is self._storithm_occurrences_ending[-1].values(). It will have linear complexity towards all temporary occurrences + atoms. It could have linear complexity towards atoms only.
+
+24. Problem, if action space is very large: there are many temporary occurrences that are later deleted which results that there are a lot of empty values in dictionaries (because when you remove them it puts DFX_DUMMY internally) and this results in more time needed to sample/find storithm occurrences. The solution is to create something like prepare_before_sampling (and maybe prepare_before_find) which will clean those empty places in dictionaries. And CustomSet can have clean() method which cleans empty values.
+
+25. Estimator should not be a static class.
+
+26. There is a bug: in remove_storithm if you remove the if, then it throws an error, it tries to remove storithm although it doesn't exist, there shouldn't be a situation when it tries to remove non-existing storithm.

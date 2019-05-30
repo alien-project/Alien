@@ -1,5 +1,5 @@
 from collections import deque
-from helpers import CustomSet
+from .helpers import CustomSet
 
 
 class Interpretation:

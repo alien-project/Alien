@@ -1,3 +1,4 @@
 .idea
 .pytest_cache
 alien.egg-info/
+alien/__pycache__/

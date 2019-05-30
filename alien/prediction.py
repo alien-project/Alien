@@ -1,4 +1,4 @@
-from helpers import AutoIncrementId
+from .helpers import AutoIncrementId
 
 
 class BasePredictor:

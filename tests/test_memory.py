@@ -1,4 +1,4 @@
-from memory import *
+from alien.memory import *
 from numpy import array, array_equal
 
 

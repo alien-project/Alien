@@ -1,8 +1,8 @@
-from trajectory import *
-from storithm import StateAtom, ActionAtom, Procedure, Condition
-from storithm import ConditionalStatement, Loop
-from prediction import Predictor
-from rl_agent import Action
+from alien.trajectory import *
+from alien.storithm import StateAtom, ActionAtom, Procedure, Condition
+from alien.storithm import ConditionalStatement, Loop
+from alien.prediction import Predictor
+from alien.rl_agent import Action
 
 
 def test_interpretation():

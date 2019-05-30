@@ -1,5 +1,5 @@
-from trajectory import StorithmOccurrence
-from helpers import AutoIncrementId
+from .trajectory import StorithmOccurrence
+from .helpers import AutoIncrementId
 from random import uniform, randint
 
 
@@ -109,6 +109,28 @@ class ParentPointer:
 
     def __hash__(self):
         return hash((self.parent, self.position))
+
+
+class StorithmRepository:
+    def __init__(self):
+        self.storithms = {}
+        self.atoms = {}
+
+    def add(self, storithm):
+        storithm.generate_id()
+        self.storithms[storithm] = storithm
+        if isinstance(storithm, Atom):
+            self.atoms[storithm] = storithm
+
+    def remove(self, storithm):
+        if storithm in self.storithms:
+            self.storithms.pop(storithm)
+            storithm.disconnect_with_children()
+            if isinstance(storithm, Atom):
+                self.atoms.pop(storithm)
+
+    def __contains__(self, storithm):
+        return storithm in self.storithms
 
 
 class Atom(Storithm):

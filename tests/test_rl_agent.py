@@ -1,7 +1,7 @@
-from rl_agent import *
+from alien.rl_agent import *
 from random import randint, seed
-from memory import Memory
-from storithm import ActionAtom
+from alien.memory import Memory
+from alien.storithm import ActionAtom
 from numpy import array, array_equal
 
 

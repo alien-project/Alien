@@ -1,9 +1,9 @@
-from trajectory import Interpretation
-from helpers import LimitedSet, AutoIncrementId, Timer
-from memory import Memory
-from storithm import ActionAtom, StateAtom, Condition, ConditionalStatement
-from storithm import Atom, Loop, Procedure
-from prediction import Estimator, Predictor
+from .trajectory import Interpretation
+from .helpers import LimitedSet, AutoIncrementId, Timer
+from .memory import Memory
+from .storithm import ActionAtom, StateAtom, Condition, ConditionalStatement
+from .storithm import Atom, Loop, Procedure
+from .prediction import Estimator, Predictor
 from functools import partial
 from numpy import exp
 from numpy.random import choice

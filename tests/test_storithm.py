@@ -1,8 +1,8 @@
-from storithm import *
-from trajectory import Interpretation, StorithmOccurrence
-from prediction import Predictor
-from rl_agent import Action
-from helpers import same
+from alien.storithm import *
+from alien.trajectory import Interpretation, StorithmOccurrence
+from alien.prediction import Predictor
+from alien.rl_agent import Action
+from alien.helpers import same
 from random import seed, choice
 
 
@@ -304,3 +304,12 @@ def test_loop_create():
 
 def test_loop_check_occurrence():
     pass
+
+
+def test_storithm_repository_add_remove_contains():
+    repository = StorithmRepository()
+    atom = ActionAtom(Action())
+    repository.add(atom)
+    assert atom in repository
+    repository.remove(atom)
+    assert atom not in repository

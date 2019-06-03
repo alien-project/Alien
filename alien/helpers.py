@@ -168,6 +168,32 @@ class CustomSet:
         return self.__str__()
 
 
+class AlzheimerList:
+    """Normal list but remembers only last elements."""
+    def __init__(self, access_limit, memory_limit):
+        self._access_limit = access_limit
+        self._memory_limit = memory_limit
+        self._elements = [None] * memory_limit
+        self._forgotten_count = 0
+        self._remembered_count = 0
+
+    def append(self, element):
+        if self._remembered_count == self._memory_limit:
+            last_elements = self._elements[-self._access_limit:]
+            self._elements[0:self._access_limit] = last_elements
+            self._remembered_count = self._access_limit
+            self._forgotten_count += self._memory_limit - self._access_limit
+
+        self._elements[self._remembered_count] = element
+        self._remembered_count += 1
+
+    def __getitem__(self, key):
+        return self._elements[key - self._forgotten_count]
+
+    def __setitem__(self, key, value):
+        self._elements[key - self._forgotten_count] = value
+
+
 class AutoIncrementId:
     """Generates automatically incremented ids."""
     next_id = 0

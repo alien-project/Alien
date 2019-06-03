@@ -46,9 +46,9 @@ def test_auto_increment_id():
 
 def test_same():
     class A:
-        def __init__(self, a_, b):
+        def __init__(self, a_, b_):
             self.a = a_
-            self.b = b
+            self.b = b_
 
         def __eq__(self, other):
             return (self.a, self.b) == (other.a, other.b)
@@ -101,3 +101,13 @@ def test_custom_set_sample():
         assert a in {5, 3}
         assert b in {5, 3}
         assert a != b
+
+
+def test_alzheimer_list_append_get_item_set_item():
+    alzheimer_list = AlzheimerList(3, 7)
+    for i in range(20):
+        alzheimer_list.append(i)
+    alzheimer_list[18] = 5
+    assert alzheimer_list[17] == 17
+    assert alzheimer_list[18] == 5
+    assert alzheimer_list[19] == 19

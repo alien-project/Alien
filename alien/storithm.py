@@ -129,6 +129,9 @@ class StorithmRepository:
             if isinstance(storithm, Atom):
                 self.atoms.pop(storithm)
 
+    def find(self, storithm):
+        return None
+
     def __contains__(self, storithm):
         return storithm in self.storithms
 

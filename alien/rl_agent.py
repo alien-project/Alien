@@ -1,5 +1,5 @@
 from .trajectory import Interpretation
-from .helpers import LimitedSet, AutoIncrementId, Timer
+from .helpers import LimitedSet, AutoIncrementId, ForgettingList, Timer
 from .memory import Memory
 from .storithm import ActionAtom, StateAtom, Condition, ConditionalStatement
 from .storithm import Atom, Loop, Procedure
@@ -27,7 +27,8 @@ class RLAgent:
         memory_tapes_length=5000,
         internal_actions=None,
         starting_points=None,
-        softmax_temperature=1
+        softmax_temperature=1,
+        forgetting_lists_limit=20
     ):
         self._observation_shape = observation_shape
         self._external_actions = external_actions
@@ -53,11 +54,12 @@ class RLAgent:
                 (Condition,),
                 (ActionAtom, Loop, Procedure),
                 (ActionAtom, ConditionalStatement, Loop, Procedure)
-            )
+            ),
+            forgetting_lists_limit
         )
         self._predictors = LimitedSet(max_predictors_count)
-        self._rewards = []
-        self._returns = []
+        self._rewards = ForgettingList(forgetting_lists_limit)
+        self._returns = ForgettingList(forgetting_lists_limit)
         self._current_external_tour = 0
         self._current_internal_tour = 0
         self._importance_for_distance_cache = []
@@ -70,7 +72,9 @@ class RLAgent:
         self._atoms = {}
         self._sample_weight = 1
         self._interpretation_cache = {}
-        self._external_actions_positions = []
+        self._external_actions_positions = ForgettingList(
+            forgetting_lists_limit
+        )
         self._last_reward_multiplier = (
             self._return_discount_factor **
             self._horizon

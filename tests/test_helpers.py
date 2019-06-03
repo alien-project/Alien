@@ -92,9 +92,11 @@ def test_same():
     assert same([2, 3], [2, 3])
 
 
-def test_custom_set_sample():
+def test_custom_set_add_remove_sample():
     custom_set = CustomSet()
     custom_set.add(5)
+    custom_set.add(4)
+    custom_set.remove(4)
     custom_set.add(3)
     for i in range(30):
         a, b = custom_set.sample(2)
@@ -103,11 +105,13 @@ def test_custom_set_sample():
         assert a != b
 
 
-def test_alzheimer_list_append_get_item_set_item():
-    alzheimer_list = AlzheimerList(3, 7)
+def test_forgetting_list_append_get_item_set_item_len():
+    forgetting_list = ForgettingList(3)
     for i in range(20):
-        alzheimer_list.append(i)
-    alzheimer_list[18] = 5
-    assert alzheimer_list[17] == 17
-    assert alzheimer_list[18] == 5
-    assert alzheimer_list[19] == 19
+        forgetting_list.append(i)
+    forgetting_list[18] = 5
+    forgetting_list[-3] = 8
+    assert forgetting_list[17] == 8
+    assert forgetting_list[18] == 5
+    assert forgetting_list[19] == 19
+    assert len(forgetting_list) == 20

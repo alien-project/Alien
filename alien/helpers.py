@@ -127,7 +127,9 @@ class CustomSet:
             self._list[self._dict[element]] = None
             self._dict.pop(element)
         except KeyError:
-            raise KeyError("Trying to remove an element that is not in set.")
+            raise KeyError(
+                "Trying to remove an element that is not in the set."
+            )
 
     def sample(self, count=1):
         if count > len(self):
@@ -136,7 +138,7 @@ class CustomSet:
         result = []
         for i in range(count):
             element = choice(self._list)
-            while element in selected:
+            while element is None or element in selected:
                 element = choice(self._list)
             selected.add(element)
             result.append(element)
@@ -168,30 +170,47 @@ class CustomSet:
         return self.__str__()
 
 
-class AlzheimerList:
-    """Normal list but remembers only last elements."""
-    def __init__(self, access_limit, memory_limit):
-        self._access_limit = access_limit
-        self._memory_limit = memory_limit
-        self._elements = [None] * memory_limit
-        self._forgotten_count = 0
-        self._remembered_count = 0
+class ForgettingList:
+    """
+    Normal list but remembers only last :limit elements.
+
+    This data structure is useful when you store a lot of elements in a
+    list but you always use only let's say last 20 elements. The point
+    of this data structure is that you save memory, but at the same
+    time you can use it in exactly the same way as normal list,
+    assuming that you always use only last elements in the list.
+    """
+    def __init__(self, limit):
+        self._limit = limit
+        self._elements = [None] * limit
+        self._count = 0
 
     def append(self, element):
-        if self._remembered_count == self._memory_limit:
-            last_elements = self._elements[-self._access_limit:]
-            self._elements[0:self._access_limit] = last_elements
-            self._remembered_count = self._access_limit
-            self._forgotten_count += self._memory_limit - self._access_limit
-
-        self._elements[self._remembered_count] = element
-        self._remembered_count += 1
+        self._elements[self._convert_key(self._count)] = element
+        self._count += 1
 
     def __getitem__(self, key):
-        return self._elements[key - self._forgotten_count]
+        if not self._is_valid(key):
+            raise IndexError("I don't remember that far.")
+        return self._elements[self._convert_key(key)]
 
     def __setitem__(self, key, value):
-        self._elements[key - self._forgotten_count] = value
+        if not self._is_valid(key):
+            raise IndexError("I don't remember that far.")
+        self._elements[self._convert_key(key)] = value
+
+    def _convert_key(self, key):
+        if key < 0:
+            return self._count % self._limit + key
+        return self._count % self._limit - self._count + key
+
+    def _is_valid(self, key):
+        if 0 <= key < self._count - self._limit or key < -self._limit:
+            return False
+        return True
+
+    def __len__(self):
+        return self._count
 
 
 class AutoIncrementId:

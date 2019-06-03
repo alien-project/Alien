@@ -1,17 +1,29 @@
 from collections import deque
-from .helpers import CustomSet
+from .helpers import CustomSet, ForgettingList
 
 
 class Interpretation:
     """Represent interpretation of internal trajectory."""
-    def __init__(self, type_groups):
+    def __init__(
+        self,
+        type_groups,
+        forgetting_lists_limit = 1000
+    ):
         self.type_groups = type_groups
         self.internal_trajectory = InternalTrajectory()
-        self._storithm_occurrences_starting = []
-        self._storithm_occurrences_ending = []
-        self._storithm_occurrences_starting_by_type = []
-        self._storithm_occurrences_ending_by_type = []
-        self._predictor_occurrences = {}
+        self._storithm_occurrences_starting = ForgettingList(
+            forgetting_lists_limit
+        )
+        self._storithm_occurrences_ending = ForgettingList(
+            forgetting_lists_limit
+        )
+        self._storithm_occurrences_starting_by_type = ForgettingList(
+            forgetting_lists_limit
+        )
+        self._storithm_occurrences_ending_by_type = ForgettingList(
+            forgetting_lists_limit
+        )
+        self._predictor_occurrences = ForgettingList(forgetting_lists_limit)
         self.temporary_occurrences = []
         self._temporary_predictor_pointers = []
 
@@ -65,8 +77,10 @@ class Interpretation:
 
         for distance, predictor in occurrence.storithm.predictors.items():
             position = occurrence.end + distance
-            if position not in self._predictor_occurrences:
-                self._predictor_occurrences[position] = set()
+            if position >= len(self._predictor_occurrences):
+                start = len(self._predictor_occurrences)
+                for _ in range(start, position + 1):
+                    self._predictor_occurrences.append(set())
             self._predictor_occurrences[position].add(predictor)
 
             if temporarily:
@@ -99,8 +113,8 @@ class Interpretation:
                     [temporary_occurrence.start]
                 if temporary_occurrence in starting_cell[group]:
                     starting_cell[group].remove(
-                            temporary_occurrence
-                        )
+                        temporary_occurrence
+                    )
                 ending_cell = self._storithm_occurrences_ending_by_type\
                     [temporary_occurrence.end]
                 if temporary_occurrence in ending_cell[group]:
@@ -227,8 +241,8 @@ class Interpretation:
     def predictors_in(self, position):
         return (
             self._predictor_occurrences[position]
-            if position in self._predictor_occurrences
-            else []
+            if position < len(self._predictor_occurrences)
+            else set()
         )
 
     def predictors_at_the_end(self):

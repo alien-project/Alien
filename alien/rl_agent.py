@@ -28,7 +28,7 @@ class RLAgent:
         internal_actions=None,
         starting_points=None,
         softmax_temperature=1,
-        forgetting_lists_limit=20
+        forgetting_lists_limit=25
     ):
         self._observation_shape = observation_shape
         self._external_actions = external_actions

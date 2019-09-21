@@ -161,14 +161,7 @@ class ActionAtom(Atom):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        if len(interpretation.internal_trajectory.actions) <= position:
-            a = 5
-        if position < 0:
-            a = 5
-        try:
-            action = interpretation.internal_trajectory.actions[position]
-        except IndexError:
-            a = 5
+        action = interpretation.internal_trajectory.actions[position]
         return StorithmOccurrence(ActionAtom(action), position, position)
 
     def __str__(self):
@@ -195,12 +188,9 @@ class StateAtom(Atom):
     @staticmethod
     def create(interpretation, sample_position):
         position = sample_position()
-        try:
-            observation = interpretation.internal_trajectory.observations[
-                position
-            ]
-        except IndexError:
-            a = 5
+        observation = interpretation.internal_trajectory.observations[
+            position
+        ]
         tape_id = randint(0, len(observation) - 1)
         value = int(observation[tape_id])
         atom = StateAtom(tape_id, value)

@@ -23,6 +23,7 @@ e) fix importance_for_return so that you don't create storithms that will be rem
 15. Make it customizable.
 
 Bugs:
+a) I have seen procedures (and there were many of them) that have connected_with_children = False and in unconnected_with_children some tuple of storithms and it was when that procedure was added to interpretation. This shouldn't happen.
 a) Removing storithm sometimes throws key error when there is no if. If you set breakpoint after if removed_predictor, then the first predictor which will have both empty storithm.parent_pointers and storithm.predictors doesn't exist in self._storithms which indicates that the storithm hasn't been added to self._storithms at all despite existence of the predictor that has this storithm.
 b) seed in tests for some reason doesn't work, the algorithm doesn't always give the same results.
 c) There are two conditions with one children: s_0_0 (state atom). They are identical but must have been inequal, probably due to different id.

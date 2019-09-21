@@ -106,7 +106,7 @@ def test_custom_set_add_remove_sample():
 
 
 def test_forgetting_list_append_get_item_set_item_len():
-    forgetting_list = ForgettingList(3)
+    forgetting_list = ForgettingList(5)
     for i in range(20):
         forgetting_list.append(i)
     forgetting_list[18] = 5

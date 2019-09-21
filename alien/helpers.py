@@ -178,7 +178,7 @@ class ForgettingList:
     list but you always use only let's say last 20 elements. The point
     of this data structure is that you save memory, but at the same
     time you can use it in exactly the same way as normal list,
-    assuming that you always use only last elements in the list.
+    supposing that you always use only last elements in the list.
     """
     def __init__(self, limit):
         self._limit = limit
@@ -205,9 +205,10 @@ class ForgettingList:
         return self._count % self._limit - self._count + key
 
     def _is_valid(self, key):
-        if 0 <= key < self._count - self._limit or key < -self._limit:
-            return False
-        return True
+        return (
+            max(self._count - self._limit, 0) <= key <= self._count or
+            -self._limit < key < 0
+        )
 
     def __len__(self):
         return self._count

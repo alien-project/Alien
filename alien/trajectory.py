@@ -51,7 +51,11 @@ class Interpretation:
             for _ in range(to_extend):
                 self.extend()
 
-        starting_cell = self._storithm_occurrences_starting[occurrence.start]
+        try:
+            starting_cell = self._storithm_occurrences_starting[occurrence.start]
+        except IndexError:
+            # raise IndexError("Forgetting list limit is too low")
+            return None
         starting_cell[occurrence.storithm] = occurrence
         ending_cell = self._storithm_occurrences_ending[occurrence.end]
         ending_cell[occurrence.storithm] = occurrence

@@ -11,8 +11,6 @@ c) (done) refactor check_occurrence()
 
 3. Before checking if storithms exists in create(), check if it occurs at this place in interpretation because if it exists, then 1. you don't need to add new predictor, 2. you shouldn't add this to interpretation. -> change beginning and ending to sorted set later, storithm_occurrences seems to be not needed.
 
-2. starting_in_cells and ending_in_cells should be a sorted set so that you can log n when searching.
-
 3. Deepcopy might fuck up storithm ids.
 
 4. Maybe self._storithms hash shouldn't be a storithm hash but children hash (but then you need to create a new class Children with its hash method). Then you can normally compare storithms and code looks more readable. Maybe create a new class StorithmInformation (or maybe better have one class storithm, but then there should be always only one instance of Storithm for the same storithm). And maybe create a new class PredictorInformation (with storithm, distance and actual predictor).
